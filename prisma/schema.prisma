@@ -41,17 +41,6 @@ model Subject {
   scores        Score[]
 }
 
-model Deadline {
-  id        String   @id @default(uuid())
-  title     String
-  date      String
-  completed Boolean  @default(false)
-  
-  // Zu welchem Fach gehört die Deadline?
-  subjectId String
-  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-}
-
 model Week {
   id         String @id @default(uuid())
   name       String
