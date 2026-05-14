@@ -3,6 +3,8 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcrypt";
+import session from "express-session";
 
 dotenv.config();
 
@@ -11,136 +13,120 @@ const PORT = process.env.PORT || 3000;
 
 async function startServer() {
     const app = express();
+
     app.use(express.json({ limit: '10mb' }));
 
-    // Hilfsfunktion: Sucht den ersten User oder erstellt einen, falls keiner da ist
-    async function getOrCreateDummyUser() {
-        try {
-            let user = await prisma.user.findFirst();
-            if (!user) {
-                user = await prisma.user.create({
-                    data: {
-                        email: "admin@localhost",
-                        passwordHash: "geheim", // Später echtes Hashing
-                        selectedProgramId: "inf",
-                        selectedSemesterId: "ss26"
-                    }
-                });
-                console.log("✅ Dummy-User erstellt");
-            }
-            return user;
-        } catch (e) {
-            console.error("❌ Fehler beim User-Check:", e);
-            return null;
+    app.use(session({
+        secret: process.env.SESSION_SECRET || "uni-tracker-ultra-secret-2026",
+        resave: false,
+        saveUninitialized: false,
+        cookie: {
+            secure: false,
+            maxAge: 1000 * 60 * 60 * 24 * 7
         }
-    }
+    }));
 
-    app.post("/api/data", async (req, res) => {
+    // ==========================================
+    // ÖFFENTLICHE AUTH-ROUTEN
+    // ==========================================
+
+    app.post("/api/auth/register", async (req, res) => {
+        console.log("📩 Registrierungs-Anfrage erhalten:", req.body.email);
         try {
-            const user = await getOrCreateDummyUser();
-            if (!user) throw new Error("Kein User verfügbar");
+            const { email, password } = req.body;
 
-            const { subjects, weeks, scores, selectedProgramId, selectedSemesterId } = req.body;
+            if (!email || !password) {
+                return res.status(400).json({ error: "E-Mail und Passwort fehlen" });
+            }
 
-            await prisma.$transaction(async (tx) => {
-                // 1. Einstellungen updaten
-                await tx.user.update({
-                    where: { id: user.id },
-                    data: { selectedProgramId, selectedSemesterId }
-                });
+            const hashedPassword = await bcrypt.hash(password, 10);
 
-                // 2. Bestehende Daten löschen (für den aktuellen User)
-                await tx.subject.deleteMany({ where: { userId: user.id } });
-                await tx.week.deleteMany({ where: { userId: user.id } });
-
-                // 3. Wochen neu anlegen
-                if (weeks?.length) {
-                    await tx.week.createMany({
-                        data: weeks.map((w: any) => ({
-                            id: w.id,
-                            name: w.name,
-                            date: w.date,
-                            semesterId: w.semesterId,
-                            userId: user.id
-                        }))
-                    });
-                }
-
-                // 4. Fächer & Deadlines & Scores
-                for (const sub of subjects || []) {
-                    const createdSubject = await tx.subject.create({
-                        data: {
-                            id: sub.id,
-                            name: sub.name,
-                            threshold: sub.threshold,
-                            semesterId: sub.semesterId,
-                            submissionUrl: sub.submissionUrl,
-                            userId: user.id
-                        }
-                    });
-
-                    // Deadlines für dieses Fach
-                    if (sub.deadlines?.length) {
-                        await tx.deadline.createMany({
-                            data: sub.deadlines.map((d: any) => ({
-                                id: d.id,
-                                title: d.title,
-                                date: d.date,
-                                completed: !!d.completed,
-                                subjectId: createdSubject.id
-                            }))
-                        });
-                    }
-                }
-
-                // 5. Scores (Punkte)
-                const scoreEntries = Object.entries(scores || {});
-                const scoreData = [];
-
-                for (const [key, value] of scoreEntries) {
-                    if (value === "" || value === undefined) continue;
-                    const [weekId, subjectId, type] = key.split("_");
-
-                    // Sicherstellen, dass die IDs existieren
-                    const subExists = subjects.some((s: any) => s.id === subjectId);
-                    const weekExists = weeks.some((w: any) => w.id === weekId);
-
-                    if (subExists && weekExists) {
-                        scoreData.push({
-                            weekId,
-                            subjectId,
-                            type,
-                            value: String(value)
-                        });
-                    }
-                }
-
-                if (scoreData.length) {
-                    // Da SQLite kein createMany mit Uniques mag, machen wir es einzeln oder prüfen vorher
-                    for (const s of scoreData) {
-                        await tx.score.create({ data: s });
-                    }
+            const user = await prisma.user.create({
+                data: {
+                    email: email.toLowerCase(),
+                    passwordHash: hashedPassword,
+                    selectedProgramId: "inf",
+                    selectedSemesterId: "ss26"
                 }
             });
 
+            (req.session as any).userId = user.id;
+            console.log("✅ User registriert & Session erstellt:", user.email);
             res.json({ success: true });
-        } catch (error) {
-            console.error("Speicherfehler:", error);
-            res.status(500).json({ error: "DB Error" });
+        } catch (error: any) {
+            console.error("❌ Fehler bei /register:", error);
+            if (error.code === 'P2002') return res.status(400).json({ error: "E-Mail existiert bereits" });
+            res.status(500).json({ error: "Datenbank-Fehler bei Registrierung" });
         }
     });
 
-    // ==========================================
-    // API ROUTEN (Jetzt mit lokaler Datenbank)
-    // ==========================================
-
-    app.get("/api/data", async (req, res) => {
+    app.post("/api/auth/login", async (req, res) => {
+        console.log("📩 Login-Anfrage erhalten:", req.body.email);
         try {
-            const user = await getOrCreateDummyUser();
+            const { email, password } = req.body;
 
-            // Lade alle Daten des Users aus der Datenbank, inklusive Relationen
+            // Check ob Daten überhaupt ankommen
+            if (!email || !password) {
+                console.log("⚠️ Login abgebrochen: Email oder Passwort fehlt");
+                return res.status(400).json({ error: "E-Mail und Passwort erforderlich" });
+            }
+
+            const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+
+            if (!user || !user.passwordHash) {
+                console.log("⚠️ Login fehlgeschlagen: User nicht gefunden oder kein Hash");
+                return res.status(401).json({ error: "Ungültige Anmeldedaten" });
+            }
+
+            // Sicherer Vergleich
+            const isMatch = await bcrypt.compare(password, user.passwordHash);
+
+            if (isMatch) {
+                (req.session as any).userId = user.id;
+                console.log("✅ Login erfolgreich:", user.email);
+                res.json({ success: true });
+            } else {
+                console.log("⚠️ Login fehlgeschlagen: Passwort falsch");
+                res.status(401).json({ error: "Ungültige Anmeldedaten" });
+            }
+        } catch (error) {
+            console.error("❌ Fehler bei /login:", error);
+            res.status(500).json({ error: "Serverfehler beim Login" });
+        }
+    });
+
+    app.get("/api/auth/me", async (req, res) => {
+        const userId = (req.session as any).userId;
+        if (!userId) return res.status(401).json({ loggedIn: false });
+
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        res.json({ loggedIn: true, email: user?.email });
+    });
+
+    app.post("/api/auth/logout", (req, res) => {
+        req.session.destroy(() => res.json({ success: true }));
+    });
+
+    // ==========================================
+    // SCHUTZ-MIDDLEWARE
+    // ==========================================
+    const requireAuth = (req: any, res: any, next: any) => {
+        if (!req.session.userId) {
+            console.log("🚫 Zugriff verweigert: Keine Session");
+            return res.status(401).json({ error: "Nicht autorisiert" });
+        }
+        next();
+    };
+
+    // ==========================================
+    // GESCHÜTZTE DATEN-API
+    // ==========================================
+
+    app.get("/api/data", requireAuth, async (req: any, res) => {
+        try {
+            const userId = req.session.userId;
             const dbUser = await prisma.user.findUnique({
-                where: { id: user.id },
+                where: { id: userId },
                 include: {
                     subjects: { include: { deadlines: true } },
                     weeks: true,
@@ -148,10 +134,9 @@ async function startServer() {
             });
 
             const allScores = await prisma.score.findMany({
-                where: { subject: { userId: user.id } }
+                where: { subject: { userId: userId } }
             });
 
-            // Baue das Score-Objekt wieder so zusammen, wie das Frontend es erwartet
             const formattedScores: Record<string, string> = {};
             allScores.forEach(score => {
                 formattedScores[`${score.weekId}_${score.subjectId}_${score.type}`] = score.value;
@@ -165,117 +150,75 @@ async function startServer() {
                 selectedSemesterId: dbUser?.selectedSemesterId,
             });
         } catch (error) {
-            console.error("Fehler beim Laden aus der DB:", error);
-            res.status(500).json({ error: "Datenbank-Fehler beim Laden" });
+            console.error("❌ Fehler beim Laden der Daten:", error);
+            res.status(500).json({ error: "Ladefehler" });
         }
     });
 
-    app.post("/api/data", async (req, res) => {
+    app.post("/api/data", requireAuth, async (req: any, res) => {
         try {
+            const userId = req.session.userId;
             const { subjects, weeks, scores, selectedProgramId, selectedSemesterId } = req.body;
-            const user = await getOrCreateDummyUser();
 
-            // Prisma Transaktion: Entweder wird alles gespeichert oder gar nichts (verhindert Datenmüll)
             await prisma.$transaction(async (tx) => {
+                await tx.user.update({ where: { id: userId }, data: { selectedProgramId, selectedSemesterId } });
 
-                // 1. User-Einstellungen updaten
-                await tx.user.update({
-                    where: { id: user.id },
-                    data: { selectedProgramId, selectedSemesterId }
-                });
+                // Wir löschen nur die Daten des eingeloggten Users
+                await tx.subject.deleteMany({ where: { userId: userId } });
+                await tx.week.deleteMany({ where: { userId: userId } });
 
-                // 2. Alte Daten löschen.
-                // (Da das Frontend aktuell alles auf einmal schickt, ist ein "Clear & Recreate"
-                // hier der einfachste Weg. 'Cascade' löscht automatisch auch Deadlines und Scores mit!)
-                await tx.subject.deleteMany({ where: { userId: user.id } });
-                await tx.week.deleteMany({ where: { userId: user.id } });
-
-                // 3. Wochen neu anlegen
-                if (weeks && weeks.length > 0) {
+                if (weeks?.length) {
                     await tx.week.createMany({
                         data: weeks.map((w: any) => ({
-                            id: w.id,
-                            name: w.name,
-                            date: w.date,
-                            semesterId: w.semesterId,
-                            userId: user.id
+                            id: w.id, name: w.name, date: w.date, semesterId: w.semesterId, userId
                         }))
                     });
                 }
 
-                // 4. Fächer & Deadlines neu anlegen
-                for (const subject of subjects || []) {
-                    await tx.subject.create({
+                for (const sub of subjects || []) {
+                    const createdSubject = await tx.subject.create({
                         data: {
-                            id: subject.id,
-                            name: subject.name,
-                            threshold: subject.threshold,
-                            semesterId: subject.semesterId,
-                            submissionUrl: subject.submissionUrl,
-                            userId: user.id,
-                            deadlines: {
-                                create: subject.deadlines?.map((d: any) => ({
-                                    id: d.id,
-                                    title: d.title,
-                                    date: d.date,
-                                    completed: d.completed
-                                })) || []
-                            }
+                            id: sub.id, name: sub.name, threshold: sub.threshold,
+                            semesterId: sub.semesterId, submissionUrl: sub.submissionUrl, userId
                         }
                     });
-                }
 
-                // 5. Scores wiederherstellen
-                const scoreEntries = Object.entries(scores || {});
-                for (const [key, value] of scoreEntries) {
-                    if (!value) continue; // Keine leeren Strings in der DB speichern
-
-                    const [weekId, subjectId, type] = key.split("_");
-
-                    // Nur speichern, wenn Fach und Woche existieren
-                    const subjectExists = subjects.some((s: any) => s.id === subjectId);
-                    const weekExists = weeks.some((w: any) => w.id === weekId);
-
-                    if (subjectExists && weekExists) {
-                        await tx.score.create({
-                            data: {
-                                weekId,
-                                subjectId,
-                                type,
-                                value: String(value)
-                            }
+                    if (sub.deadlines?.length) {
+                        await tx.deadline.createMany({
+                            data: sub.deadlines.map((d: any) => ({
+                                id: d.id, title: d.title, date: d.date, completed: !!d.completed, subjectId: createdSubject.id
+                            }))
                         });
                     }
                 }
-            });
 
+                const scoreEntries = Object.entries(scores || {});
+                for (const [key, value] of scoreEntries) {
+                    if (!value) continue;
+                    const [weekId, subjectId, type] = key.split("_");
+                    // Nur speichern wenn das Fach in dieser Transaction existiert
+                    if (subjects.some((s: any) => s.id === subjectId) && weeks.some((w: any) => w.id === weekId)) {
+                        await tx.score.create({ data: { weekId, subjectId, type, value: String(value) } });
+                    }
+                }
+            });
             res.json({ success: true });
         } catch (error) {
-            console.error("Fehler beim Speichern in der DB:", error);
-            res.status(500).json({ error: "Datenbank-Fehler beim Speichern" });
+            console.error("❌ Fehler beim Speichern:", error);
+            res.status(500).json({ error: "Speicherfehler" });
         }
     });
 
-    // ==========================================
-    // FRONTEND (Vite & Static Files)
-    // ==========================================
     if (process.env.NODE_ENV !== "production") {
-        const vite = await createViteServer({
-            server: { middlewareMode: true },
-            appType: "spa",
-        });
+        const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
         app.use(vite.middlewares);
     } else {
         const distPath = path.join(process.cwd(), "dist");
         app.use(express.static(distPath));
-        app.get("*", (req, res) => {
-            res.sendFile(path.join(distPath, "index.html"));
-        });
+        app.get("*", (req, res) => res.sendFile(path.join(distPath, "index.html")));
     }
 
-    app.listen(PORT, () => {
-        console.log(`🚀 Server läuft auf http://localhost:${PORT}`);
-    });
+    app.listen(PORT, () => console.log(`🚀 Server läuft auf http://localhost:${PORT}`));
 }
 
 startServer();

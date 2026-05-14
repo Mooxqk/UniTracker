@@ -1,62 +1,87 @@
 import React, { useState, useEffect } from 'react';
-import { generateWeeksForSemester, INITIAL_PROGRAMS, INITIAL_SEMESTERS } from './constants';
+import { INITIAL_PROGRAMS, INITIAL_SEMESTERS } from './constants';
 import { Scores, Subject, Week } from './types';
 import { calculateSummary } from './utils';
+import { Loader2 } from 'lucide-react';
 import { Dashboard } from './components/Dashboard';
 import { CourseDetail } from './components/CourseDetail';
+import { Auth } from './components/Auth';
 import { dataService } from './services/dataService';
-import { Loader2, RefreshCcw } from 'lucide-react';
 
 export default function App() {
     const [loading, setLoading] = useState(true);
+    const [user, setUser] = useState<{ email: string } | null>(null);
+
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [weeks, setWeeks] = useState<Week[]>([]);
     const [scores, setScores] = useState<Scores>({});
+
     const [selectedProgramId, setSelectedProgramId] = useState<string>(INITIAL_PROGRAMS[0].id);
     const [selectedSemesterId, setSelectedSemesterId] = useState<string>(INITIAL_SEMESTERS[1].id);
-
     const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
 
-    // Daten beim Start vom Server laden
+    // 1. Prüfen ob der User eingeloggt ist
     useEffect(() => {
-        async function initData() {
+        async function checkAuth() {
             try {
-                const serverData = await dataService.fetchData();
-                if (serverData) {
-                    setSubjects(serverData.subjects || []);
-                    setWeeks(serverData.weeks || []);
-                    setScores(serverData.scores || {});
-                    setSelectedProgramId(serverData.selectedProgramId || INITIAL_PROGRAMS[0].id);
-                    setSelectedSemesterId(serverData.selectedSemesterId || INITIAL_SEMESTERS[1].id);
+                const res = await fetch('/api/auth/me');
+                const data = await res.json();
+                if (data.loggedIn) {
+                    setUser({ email: data.email });
+                    // Wenn eingeloggt, Daten laden
+                    const serverData = await dataService.fetchData();
+                    if (serverData) {
+                        setSubjects(serverData.subjects || []);
+                        setWeeks(serverData.weeks || []);
+                        setScores(serverData.scores || {});
+                        setSelectedProgramId(serverData.selectedProgramId || INITIAL_PROGRAMS[0].id);
+                        setSelectedSemesterId(serverData.selectedSemesterId || INITIAL_SEMESTERS[1].id);
+                    }
                 }
-            } catch (error) {
-                console.error("Initialisierung fehlgeschlagen:", error);
+            } catch (err) {
+                console.error("Fehler beim Auth-Check", err);
             } finally {
                 setLoading(false);
             }
         }
-        initData();
+        checkAuth();
     }, []);
 
-    // Automatische Speicherung bei Änderungen
+    // Automatisches Speichern, wenn sich Daten ändern
     useEffect(() => {
-        if (loading) return;
-
-        const saveData = async () => {
-            await dataService.saveData({
+        if (user && !loading) {
+            dataService.saveData({
                 subjects,
                 weeks,
                 scores,
                 selectedProgramId,
-                selectedSemesterId,
+                selectedSemesterId
             });
+        }
+    }, [subjects, weeks, scores, selectedProgramId, selectedSemesterId, user, loading]);
+
+    const stats = calculateSummary(subjects, weeks, scores);
+
+    const handleAddCourse = (name: string, threshold: number) => {
+        const newCourse: Subject = {
+            id: `c${Date.now()}`,
+            name,
+            threshold,
+            semesterId: selectedSemesterId,
+            deadlines: []
         };
+        setSubjects([...subjects, newCourse]);
+    };
 
-        const timeout = setTimeout(saveData, 500); // Debounce, um den Server nicht zu fluten
-        return () => clearTimeout(timeout);
-    }, [subjects, weeks, scores, selectedProgramId, selectedSemesterId, loading]);
+    const handleDeleteCourse = (id: string) => {
+        setSubjects(subjects.filter(s => s.id !== id));
+        const newScores = { ...scores };
+        Object.keys(newScores).forEach(key => {
+            if (key.includes(`_${id}_`)) delete newScores[key];
+        });
+        setScores(newScores);
+    };
 
-    // Handler für Änderungen (stark vereinfacht)
     const handleScoreChange = (weekId: string, subjectId: string, type: 'max' | 'achieved', value: string) => {
         setScores(prev => ({
             ...prev,
@@ -64,24 +89,8 @@ export default function App() {
         }));
     };
 
-    const handleAddCourse = (name: string, threshold: number) => {
-        const newCourse: Subject = {
-            id: `${name.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}`,
-            name,
-            threshold,
-            semesterId: selectedSemesterId,
-            deadlines: []
-        };
-        setSubjects(prev => [...prev, newCourse]);
-    };
-
-    const handleDeleteCourse = (id: string) => {
-        setSubjects(prev => prev.filter(s => s.id !== id));
-        if (selectedSubjectId === id) setSelectedSubjectId(null);
-    };
-
     const handleToggleDeadline = (subjectId: string, deadlineId: string) => {
-        setSubjects(prev => prev.map(s => {
+        setSubjects(subjects.map(s => {
             if (s.id !== subjectId) return s;
             return {
                 ...s,
@@ -90,43 +99,44 @@ export default function App() {
         }));
     };
 
-    // Hilfsvariablen für die Anzeige
-    const currentSemesterSubjects = subjects.filter(s => s.semesterId === selectedSemesterId);
-    const currentSemesterWeeks = weeks.filter(w => w.semesterId === selectedSemesterId);
-    const selectedSubject = subjects.find(s => s.id === selectedSubjectId);
-    const stats = calculateSummary(subjects, weeks, scores);
-
     if (loading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50">
-                <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+                <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
             </div>
         );
     }
 
+    // Wenn kein User da ist -> Login Screen
+    if (!user) {
+        return <Auth onAuthSuccess={() => window.location.reload()} />;
+    }
+
+    const currentSemesterSubjects = subjects.filter(s => s.id.includes(selectedSemesterId) || s.semesterId === selectedSemesterId);
+    const currentSemesterWeeks = weeks.filter(w => w.semesterId === selectedSemesterId);
+    const selectedSubject = subjects.find(s => s.id === selectedSubjectId);
+
     return (
-        <div className="min-h-screen bg-slate-50 text-slate-900 font-sans p-4 md:p-8">
-            <div className="max-w-5xl mx-auto space-y-8">
+        <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
+            <header className="max-w-5xl mx-auto px-6 pt-12 pb-8 flex items-center justify-between">
+                <div>
+                    <h1 className="text-3xl font-black tracking-tight text-slate-800">
+                        Uni Tracker <span className="text-indigo-600">.</span>
+                    </h1>
+                    <p className="text-slate-500 font-medium">{user.email}</p>
+                </div>
+                <button
+                    onClick={async () => {
+                        await fetch('/api/auth/logout', { method: 'POST' });
+                        window.location.reload();
+                    }}
+                    className="text-sm font-bold text-slate-400 hover:text-red-500 transition-colors"
+                >
+                    Abmelden
+                </button>
+            </header>
 
-                <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-3xl font-black tracking-tight text-slate-900 flex items-center gap-3">
-                            Uni Tracker <span className="text-indigo-600 text-sm font-bold bg-indigo-50 px-2 py-1 rounded-lg">PRO</span>
-                        </h1>
-                        <p className="text-slate-500 font-medium">Verwalte deine Übungsblätter lokal auf dem Server</p>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <select
-                            value={selectedSemesterId}
-                            onChange={(e) => setSelectedSemesterId(e.target.value)}
-                            className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        >
-                            {INITIAL_SEMESTERS.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                        </select>
-                    </div>
-                </header>
-
+            <main className="max-w-5xl mx-auto px-6">
                 {selectedSubject ? (
                     <CourseDetail
                         subject={selectedSubject}
@@ -138,11 +148,26 @@ export default function App() {
                         }}
                         onBack={() => setSelectedSubjectId(null)}
                         onScoreChange={(weekId, type, value) => handleScoreChange(weekId, selectedSubject.id, type, value)}
-                        onThresholdChange={(v) => setSubjects(prev => prev.map(s => s.id === selectedSubject.id ? {...s, threshold: parseFloat(v)} : s))}
-                        onUrlChange={(v) => setSubjects(prev => prev.map(s => s.id === selectedSubject.id ? {...s, submissionUrl: v} : s))}
-                        onAddWeek={(name, date) => setWeeks(prev => [...prev, { id: `w_${Date.now()}`, name, date, semesterId: selectedSemesterId }])}
-                        onAddDeadline={(sId, title, date) => setSubjects(prev => prev.map(s => s.id === sId ? {...s, deadlines: [...(s.deadlines || []), {id: `d_${Date.now()}`, title, date, completed: false}]} : s))}
-                        onDeleteDeadline={(sId, dId) => setSubjects(prev => prev.map(s => s.id === sId ? {...s, deadlines: s.deadlines?.filter(d => d.id !== dId)} : s))}
+                        onThresholdChange={(v) => {
+                            setSubjects(subjects.map(s => s.id === selectedSubject.id ? {...s, threshold: parseFloat(v) || 0} : s));
+                        }}
+                        onUrlChange={(v) => {
+                            setSubjects(subjects.map(s => s.id === selectedSubject.id ? {...s, submissionUrl: v} : s));
+                        }}
+                        onAddWeek={(name, date) => {
+                            setWeeks([...weeks, { id: `w${Date.now()}`, name, date, semesterId: selectedSemesterId }]);
+                        }}
+                        onAddDeadline={(subId, title, date, time, urgency) => {
+                            setSubjects(subjects.map(s => s.id === subId ? {
+                                ...s,
+                                deadlines: [...(s.deadlines || []), { id: `d${Date.now()}`, title, date, time, urgency, completed: false }]
+                            } : s));
+                        }}
+                        onDeleteDeadline={(subId, dId) => {
+                            setSubjects(subjects.map(s => s.id === subId ? {
+                                ...s, deadlines: s.deadlines?.filter(d => d.id !== dId)
+                            } : s));
+                        }}
                         onToggleDeadline={handleToggleDeadline}
                     />
                 ) : (
@@ -155,11 +180,11 @@ export default function App() {
                         onToggleDeadline={handleToggleDeadline}
                     />
                 )}
+            </main>
 
-                <footer className="text-center text-[10px] font-bold uppercase tracking-widest text-slate-400 pb-8 mt-4 flex items-center justify-center gap-2">
-                    <RefreshCcw className="w-3 h-3" /> Daten werden live auf dem Server gespeichert
-                </footer>
-            </div>
+            <footer className="text-center text-xs font-bold uppercase tracking-wider text-slate-400 pb-8 mt-12">
+                Persönlicher Account: {user.email}
+            </footer>
         </div>
     );
 }
