@@ -1,6 +1,6 @@
 import React from 'react';
 import { Subject, Week, Scores, SubjectStats } from '../types';
-import { ArrowLeft, Target, CheckCircle2, Link as LinkIcon, ExternalLink, Trash2, Calculator, Clock } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Link as LinkIcon, ExternalLink, Trash2, Calculator, Clock } from 'lucide-react';
 
 export function CourseDetail({
                                  subject, weeks, scores, stats, onBack, onScoreChange, onUrlChange, onAddDeadline, onDeleteDeadline, onToggleDeadline
@@ -9,14 +9,19 @@ export function CourseDetail({
     const [newDeadlineTitle, setNewDeadlineTitle] = React.useState('');
     const [newDeadlineDate, setNewDeadlineDate] = React.useState('');
     const [newDeadlineTime, setNewDeadlineTime] = React.useState('');
+    const [newDeadlineUrgency, setNewDeadlineUrgency] = React.useState<number>(1);
+
+    const prioColors: Record<number, string> = { 1: 'bg-slate-300', 2: 'bg-amber-400', 3: 'bg-red-500' };
+    const prioLabels: Record<number, string> = { 1: 'Normal', 2: 'Hoch', 3: 'ASAP' };
 
     const handleAddDeadline = (e: React.FormEvent) => {
         e.preventDefault();
         if (newDeadlineTitle && newDeadlineDate) {
-            onAddDeadline(subject.id, newDeadlineTitle, newDeadlineDate, newDeadlineTime || undefined, 1);
+            onAddDeadline(subject.id, newDeadlineTitle, newDeadlineDate, newDeadlineTime || undefined, newDeadlineUrgency);
             setNewDeadlineTitle('');
             setNewDeadlineDate('');
             setNewDeadlineTime('');
+            setNewDeadlineUrgency(1);
         }
     };
 
@@ -24,10 +29,9 @@ export function CourseDetail({
         <div className="flex flex-col gap-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
 
-                {/* LEFT SIDEBAR: Jetzt mit integriertem Zurück-Pfeil */}
+                {/* LEFT SIDEBAR */}
                 <div className="md:col-span-1 flex flex-col gap-5 md:sticky md:top-24">
 
-                    {/* ZURÜCK & TITEL (Fest in der Sidebar) */}
                     <div className="flex items-center gap-3 mb-2 px-1">
                         <button
                             onClick={onBack}
@@ -38,7 +42,6 @@ export function CourseDetail({
                         <h2 className="text-2xl font-black tracking-tight text-slate-800 truncate">{subject.name}</h2>
                     </div>
 
-                    {/* Status Card */}
                     <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
                         <p className="text-[10px] font-bold text-slate-400 uppercase mb-4 tracking-widest">Status ({subject.threshold}%)</p>
                         <div className="flex items-baseline gap-2 mb-3">
@@ -51,7 +54,6 @@ export function CourseDetail({
                         <p className={`text-[10px] font-black uppercase ${isPassed ? 'text-emerald-600' : 'text-indigo-600'}`}>{stats.progressToPass.toFixed(1)}% erreicht</p>
                     </div>
 
-                    {/* Portal & Termine */}
                     <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
                         <div className="flex items-center gap-2 mb-4">
                             <LinkIcon className="w-3.5 h-3.5 text-slate-400" />
@@ -65,26 +67,39 @@ export function CourseDetail({
 
                             <hr className="border-slate-100" />
 
-                            <form onSubmit={handleAddDeadline} className="space-y-2">
-                                <input required value={newDeadlineTitle} onChange={e => setNewDeadlineTitle(e.target.value)} placeholder="Neuer Termin..." className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2" />
+                            <form onSubmit={handleAddDeadline} className="space-y-3">
+                                <input required value={newDeadlineTitle} onChange={e => setNewDeadlineTitle(e.target.value)} placeholder="Neuer Termin..." className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500" />
                                 <div className="flex gap-2">
-                                    <input required type="date" value={newDeadlineDate} onChange={e => setNewDeadlineDate(e.target.value)} className="flex-[2] text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5" />
-                                    <input type="time" value={newDeadlineTime} onChange={e => setNewDeadlineTime(e.target.value)} className="flex-1 text-xs bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5" />
+                                    <input required type="date" value={newDeadlineDate} onChange={e => setNewDeadlineDate(e.target.value)} className="w-[45%] text-xs bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 outline-none focus:ring-1 focus:ring-indigo-500" />
+                                    <input type="time" value={newDeadlineTime} onChange={e => setNewDeadlineTime(e.target.value)} className="w-[25%] text-xs bg-slate-50 border border-slate-200 rounded-xl px-1 py-2 outline-none focus:ring-1 focus:ring-indigo-500 text-center" />
+                                    <select value={newDeadlineUrgency} onChange={e => setNewDeadlineUrgency(Number(e.target.value))} className="w-[30%] text-[10px] bg-slate-50 border border-slate-200 rounded-xl px-1 py-2 outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer font-bold text-slate-600">
+                                        <option value={1}>Normal</option>
+                                        <option value={2}>Hoch</option>
+                                        <option value={3}>ASAP</option>
+                                    </select>
                                 </div>
                                 <button type="submit" className="w-full py-2 bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all">Termin Speichern</button>
                             </form>
 
                             <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
-                                {(subject.deadlines || []).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map((d: any) => (
+                                {(subject.deadlines || []).sort((a: any, b: any) => {
+                                    // Zuerst nach Datum, dann nach Prio (höchste zuerst) sortieren
+                                    const dateDiff = new Date(a.date).getTime() - new Date(b.date).getTime();
+                                    if (dateDiff !== 0) return dateDiff;
+                                    return (b.urgency || 1) - (a.urgency || 1);
+                                }).map((d: any) => (
                                     <div key={d.id} className="group p-2.5 bg-slate-50 rounded-xl relative border border-transparent hover:border-slate-200">
                                         <button onClick={() => onDeleteDeadline(subject.id, d.id)} className="absolute top-1.5 right-1.5 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-3 h-3" /></button>
                                         <div className="flex items-center gap-2">
                                             <button onClick={() => onToggleDeadline(subject.id, d.id)} className={d.completed ? 'text-emerald-500' : 'text-slate-300'}>{d.completed ? <CheckCircle2 className="w-3.5 h-3.5" /> : <div className="w-3.5 h-3.5 rounded-full border-2 border-current" />}</button>
-                                            <div className="flex flex-col min-w-0">
+                                            <div className="flex flex-col min-w-0 gap-0.5">
                                                 <span className={`text-[11px] font-bold truncate pr-3 ${d.completed ? 'line-through text-slate-400' : 'text-slate-700'}`}>{d.title}</span>
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-2 mt-0.5">
                                                     <span className="text-[9px] text-slate-400 font-bold">{new Date(d.date).toLocaleDateString("de-DE")}</span>
-                                                    {d.time && <span className="flex items-center gap-1 text-[9px] text-indigo-500 font-bold"><Clock className="w-2 h-2" />{d.time}</span>}
+                                                    {d.time && <span className="flex items-center gap-0.5 text-[9px] text-slate-500 font-bold"><Clock className="w-2 h-2" />{d.time}</span>}
+                                                    <span className={`px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase text-white ${prioColors[d.urgency || 1]}`}>
+                                                        {prioLabels[d.urgency || 1]}
+                                                    </span>
                                                 </div>
                                             </div>
                                         </div>

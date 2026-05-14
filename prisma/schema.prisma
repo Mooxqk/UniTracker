@@ -73,3 +73,14 @@ model Score {
   // Ein optionales userId Feld hilft beim Filtern, ist aber laut deinem
   // letzten Code nicht zwingend im Score-Model vorhanden.
 }
+
+model Deadline {
+  id        String   @id
+  title     String
+  date      String
+  time      String?  // NEU: Optional (?) weil nicht jeder Termin eine Uhrzeit hat
+  urgency   Int      @default(1) // NEU: Standardmäßig Prio 1 (Normal)
+  completed Boolean
+  subjectId String
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+}

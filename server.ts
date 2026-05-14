@@ -74,6 +74,7 @@ async function startServer() {
             where: { id: userId },
             include: { subjects: { include: { deadlines: true } } }
         });
+
         const allScores = await prisma.score.findMany({
             where: { subject: { userId: userId } }
         });
@@ -95,19 +96,29 @@ async function startServer() {
         try {
             await prisma.$transaction(async (tx) => {
                 await tx.user.update({ where: { id: userId }, data: { selectedSemesterId } });
+
                 await tx.deadline.deleteMany({ where: { subject: { userId } } });
                 await tx.score.deleteMany({ where: { subject: { userId } } });
                 await tx.subject.deleteMany({ where: { userId } });
 
-                if (subjects) {
+                if (subjects && subjects.length >= 0) {
                     for (const sub of subjects) {
                         const createdSub = await tx.subject.create({
                             data: {
-                                id: sub.id, name: sub.name, threshold: sub.threshold, semesterId: sub.semesterId,
-                                submissionUrl: sub.submissionUrl, userId,
+                                id: sub.id,
+                                name: sub.name,
+                                threshold: sub.threshold,
+                                semesterId: sub.semesterId,
+                                submissionUrl: sub.submissionUrl,
+                                userId, // User-ID für Multi-User-Sicherheit
                                 deadlines: {
                                     create: (sub.deadlines || []).map((d: any) => ({
-                                        id: d.id, title: d.title, date: d.date, completed: !!d.completed,
+                                        id: d.id,
+                                        title: d.title,
+                                        date: d.date,
+                                        time: d.time || null,     // Uhrzeit speichern
+                                        urgency: d.urgency || 1,  // Prio speichern
+                                        completed: !!d.completed,
                                     }))
                                 }
                             }
@@ -131,7 +142,10 @@ async function startServer() {
                 }
             });
             res.json({ success: true });
-        } catch (error) { res.status(500).json({ error: "Speicherfehler" }); }
+        } catch (error) {
+            console.error("Transaktionsfehler:", error);
+            res.status(500).json({ error: "Speicherfehler" });
+        }
     });
 
     // --- SERVING ---
