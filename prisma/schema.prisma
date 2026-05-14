@@ -67,8 +67,8 @@ model Deadline {
   id        String   @id
   title     String
   date      String
-  time      String?  // NEU: Optional (?) weil nicht jeder Termin eine Uhrzeit hat
-  urgency   Int      @default(1) // NEU: Standardmäßig Prio 1 (Normal)
+  time      String?
+  urgency   Int      @default(3) // 3 ist Grün/Standard
   completed Boolean
   subjectId String
   subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)

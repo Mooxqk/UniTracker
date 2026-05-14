@@ -9,9 +9,9 @@ export function CourseDetail({
     const [newDeadlineTitle, setNewDeadlineTitle] = React.useState('');
     const [newDeadlineDate, setNewDeadlineDate] = React.useState('');
     const [newDeadlineTime, setNewDeadlineTime] = React.useState('');
-    const [newDeadlineUrgency, setNewDeadlineUrgency] = React.useState<number>(1);
+    const [newDeadlineUrgency, setNewDeadlineUrgency] = React.useState<number>(3); // Standard: 3 (Grün)
 
-    const prioColors: Record<number, string> = { 1: 'bg-slate-300', 2: 'bg-amber-400', 3: 'bg-red-500' };
+    const prioColors: Record<number, string> = { 1: 'bg-red-500', 2: 'bg-amber-400', 3: 'bg-emerald-500' };
     const prioLabels: Record<number, string> = { 1: 'Prio 1', 2: 'Prio 2', 3: 'Prio 3' };
 
     const handleAddDeadline = (e: React.FormEvent) => {
@@ -21,7 +21,7 @@ export function CourseDetail({
             setNewDeadlineTitle('');
             setNewDeadlineDate('');
             setNewDeadlineTime('');
-            setNewDeadlineUrgency(1);
+            setNewDeadlineUrgency(3); // Nach dem Speichern wieder auf Grün setzen
         }
     };
 
@@ -69,24 +69,41 @@ export function CourseDetail({
 
                             <form onSubmit={handleAddDeadline} className="space-y-3">
                                 <input required value={newDeadlineTitle} onChange={e => setNewDeadlineTitle(e.target.value)} placeholder="Neuer Termin..." className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500" />
+
                                 <div className="flex gap-2">
                                     <input required type="date" value={newDeadlineDate} onChange={e => setNewDeadlineDate(e.target.value)} className="w-[45%] text-xs bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 outline-none focus:ring-1 focus:ring-indigo-500" />
                                     <input type="time" value={newDeadlineTime} onChange={e => setNewDeadlineTime(e.target.value)} className="w-[25%] text-xs bg-slate-50 border border-slate-200 rounded-xl px-1 py-2 outline-none focus:ring-1 focus:ring-indigo-500 text-center" />
-                                    <select value={newDeadlineUrgency} onChange={e => setNewDeadlineUrgency(Number(e.target.value))} className="w-[30%] text-[10px] bg-slate-50 border border-slate-200 rounded-xl px-1 py-2 outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer font-bold text-slate-600">
-                                        <option value={1}>Prio 3</option>
-                                        <option value={2}>Prio 2</option>
-                                        <option value={3}>Prio 1</option>
-                                    </select>
+
+                                    {/* NEU: DIE 3 PRIO-BUTTONS */}
+                                    <div className="flex gap-1 w-[30%]">
+                                        {[1, 2, 3].map((prio) => (
+                                            <button
+                                                key={prio}
+                                                type="button"
+                                                onClick={() => setNewDeadlineUrgency(prio)}
+                                                className={`flex-1 rounded-xl text-[9px] font-black transition-all ${
+                                                    newDeadlineUrgency === prio
+                                                        ? prio === 1 ? 'bg-red-500 text-white shadow-inner'
+                                                            : prio === 2 ? 'bg-amber-400 text-white shadow-inner'
+                                                                : 'bg-emerald-500 text-white shadow-inner'
+                                                        : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                                                }`}
+                                            >
+                                                P{prio}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
+
                                 <button type="submit" className="w-full py-2 bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all">Termin Speichern</button>
                             </form>
 
                             <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
                                 {(subject.deadlines || []).sort((a: any, b: any) => {
-                                    // Zuerst nach Datum, dann nach Prio (höchste zuerst) sortieren
                                     const dateDiff = new Date(a.date).getTime() - new Date(b.date).getTime();
                                     if (dateDiff !== 0) return dateDiff;
-                                    return (b.urgency || 1) - (a.urgency || 1);
+                                    // Prio 1 (kleinste Zahl) steht oben!
+                                    return (a.urgency || 3) - (b.urgency || 3);
                                 }).map((d: any) => (
                                     <div key={d.id} className="group p-2.5 bg-slate-50 rounded-xl relative border border-transparent hover:border-slate-200">
                                         <button onClick={() => onDeleteDeadline(subject.id, d.id)} className="absolute top-1.5 right-1.5 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-3 h-3" /></button>
@@ -97,8 +114,8 @@ export function CourseDetail({
                                                 <div className="flex items-center gap-2 mt-0.5">
                                                     <span className="text-[9px] text-slate-400 font-bold">{new Date(d.date).toLocaleDateString("de-DE")}</span>
                                                     {d.time && <span className="flex items-center gap-0.5 text-[9px] text-slate-500 font-bold"><Clock className="w-2 h-2" />{d.time}</span>}
-                                                    <span className={`px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase text-white ${prioColors[d.urgency || 1]}`}>
-                                                        {prioLabels[d.urgency || 1]}
+                                                    <span className={`px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase text-white ${prioColors[d.urgency || 3]}`}>
+                                                        {prioLabels[d.urgency || 3]}
                                                     </span>
                                                 </div>
                                             </div>

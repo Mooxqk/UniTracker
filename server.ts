@@ -15,7 +15,6 @@ async function startServer() {
     const app = express();
     app.use(express.json({ limit: '10mb' }));
 
-    // Wichtig für Online-Hoster (Proxy-Support)
     app.set('trust proxy', 1);
 
     app.use(session({
@@ -23,13 +22,12 @@ async function startServer() {
         resave: false,
         saveUninitialized: false,
         cookie: {
-            secure: process.env.NODE_ENV === "production", // Nur HTTPS im Web
+            secure: process.env.NODE_ENV === "production",
             maxAge: 1000 * 60 * 60 * 24 * 7,
             sameSite: 'lax'
         }
     }));
 
-    // --- AUTH ---
     app.post("/api/auth/register", async (req, res) => {
         try {
             const { email, password } = req.body;
@@ -67,7 +65,6 @@ async function startServer() {
         next();
     };
 
-    // --- DATA ---
     app.get("/api/data", requireAuth, async (req: any, res) => {
         const userId = req.session.userId;
         const dbUser = await prisma.user.findUnique({
@@ -110,14 +107,14 @@ async function startServer() {
                                 threshold: sub.threshold,
                                 semesterId: sub.semesterId,
                                 submissionUrl: sub.submissionUrl,
-                                userId, // User-ID für Multi-User-Sicherheit
+                                userId,
                                 deadlines: {
                                     create: (sub.deadlines || []).map((d: any) => ({
                                         id: d.id,
                                         title: d.title,
                                         date: d.date,
-                                        time: d.time || null,     // Uhrzeit speichern
-                                        urgency: d.urgency || 1,  // Prio speichern
+                                        time: d.time || null,
+                                        urgency: d.urgency || 3, // Fallback auf Grün (3)
                                         completed: !!d.completed,
                                     }))
                                 }
@@ -148,7 +145,6 @@ async function startServer() {
         }
     });
 
-    // --- SERVING ---
     if (process.env.NODE_ENV !== "production") {
         const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
         app.use(vite.middlewares);
