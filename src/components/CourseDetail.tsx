@@ -12,7 +12,7 @@ export function CourseDetail({
     const [newDeadlineUrgency, setNewDeadlineUrgency] = React.useState<number>(1);
 
     const prioColors: Record<number, string> = { 1: 'bg-slate-300', 2: 'bg-amber-400', 3: 'bg-red-500' };
-    const prioLabels: Record<number, string> = { 1: 'Normal', 2: 'Hoch', 3: 'ASAP' };
+    const prioLabels: Record<number, string> = { 1: 'Prio 1', 2: 'Prio 2', 3: 'Prio 3' };
 
     const handleAddDeadline = (e: React.FormEvent) => {
         e.preventDefault();
