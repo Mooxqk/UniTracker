@@ -26,13 +26,6 @@ dist-ssr/
 *.db
 *.db-journal
 
-# --- Prisma ---
-# Prisma-Migrations sind okay, aber die generierten Clients nicht
-/prisma/migrations/
-# Falls du den SQLite-Pfad fix in prisma/ hast:
-/prisma/*.db
-/prisma/*.db-journal
-
 # --- Build / Vite ---
 # Die kompilierten Dateien werden erst auf dem Server erstellt
 dist/
