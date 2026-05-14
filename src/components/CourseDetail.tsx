@@ -73,9 +73,9 @@ export function CourseDetail({
                                     <input required type="date" value={newDeadlineDate} onChange={e => setNewDeadlineDate(e.target.value)} className="w-[45%] text-xs bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 outline-none focus:ring-1 focus:ring-indigo-500" />
                                     <input type="time" value={newDeadlineTime} onChange={e => setNewDeadlineTime(e.target.value)} className="w-[25%] text-xs bg-slate-50 border border-slate-200 rounded-xl px-1 py-2 outline-none focus:ring-1 focus:ring-indigo-500 text-center" />
                                     <select value={newDeadlineUrgency} onChange={e => setNewDeadlineUrgency(Number(e.target.value))} className="w-[30%] text-[10px] bg-slate-50 border border-slate-200 rounded-xl px-1 py-2 outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer font-bold text-slate-600">
-                                        <option value={1}>Normal</option>
-                                        <option value={2}>Hoch</option>
-                                        <option value={3}>ASAP</option>
+                                        <option value={1}>Prio 3</option>
+                                        <option value={2}>Prio 2</option>
+                                        <option value={3}>Prio 1</option>
                                     </select>
                                 </div>
                                 <button type="submit" className="w-full py-2 bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all">Termin Speichern</button>
