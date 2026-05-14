@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// =========================================
+// DEINE TABELLEN
+// =========================================
+
+model User {
+  id                 String    @id @default(uuid())
+  email              String    @unique
+  passwordHash       String    // Später für deinen echten Login
+  selectedProgramId  String    @default("inf")
+  selectedSemesterId String    @default("ss26")
+  
+  // Verknüpfungen (Ein User hat viele Fächer und Wochen)
+  subjects           Subject[]
+  weeks              Week[]
+  
+  createdAt          DateTime  @default(now())
+}
+
+model Subject {
+  id            String     @id @default(uuid())
+  name          String
+  threshold     Float
+  semesterId    String
+  submissionUrl String?
+  
+  // Wem gehört das Fach?
+  userId        String
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Was gehört zu dem Fach?
+  deadlines     Deadline[]
+  scores        Score[]
+}
+
+model Deadline {
+  id        String   @id @default(uuid())
+  title     String
+  date      String
+  completed Boolean  @default(false)
+  
+  // Zu welchem Fach gehört die Deadline?
+  subjectId String
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+}
+
+model Week {
+  id         String @id @default(uuid())
+  name       String
+  date       String
+  semesterId String
+  
+  // Wem gehört die Woche?
+  userId     String
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Score {
+  id        String  @id @default(uuid())
+  weekId    String
+  type      String  // "max" oder "achieved"
+  value     String
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  // Ein optionales userId Feld hilft beim Filtern, ist aber laut deinem
+  // letzten Code nicht zwingend im Score-Model vorhanden.
+}
