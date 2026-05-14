@@ -1,8 +1,39 @@
-node_modules/
-build/
-dist/
-coverage/
+# --- IDE / System ---
+.vscode/
+.idea/
 .DS_Store
 *.log
-.env*
-!.env.example
+Thumbs.db
+
+# --- Dependencies ---
+# Niemals den node_modules Ordner hochladen!
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# --- Environment & Secrets ---
+# Hier stehen deine Passwörter und das SESSION_SECRET drin
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# --- Datenbank (SQLite) ---
+# Wir ignorieren die lokale Datenbankdatei, damit Nutzer sich nicht gegenseitig 
+# ihre dev.db überschreiben. Jeder Nutzer/Hoster erstellt seine eigene.
+*.db
+*.db-journal
+
+# --- Prisma ---
+# Prisma-Migrations sind okay, aber die generierten Clients nicht
+/prisma/migrations/
+# Falls du den SQLite-Pfad fix in prisma/ hast:
+/prisma/*.db
+/prisma/*.db-journal
+
+# --- Build / Vite ---
+# Die kompilierten Dateien werden erst auf dem Server erstellt
+dist/
+.vite/

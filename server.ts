@@ -15,13 +15,21 @@ async function startServer() {
     const app = express();
     app.use(express.json({ limit: '10mb' }));
 
+    // Wichtig für Online-Hoster (Proxy-Support)
+    app.set('trust proxy', 1);
+
     app.use(session({
-        secret: process.env.SESSION_SECRET || "uni-tracker-ultra-secret-2026",
+        secret: process.env.SESSION_SECRET || "fallback-nur-fuer-lokal",
         resave: false,
         saveUninitialized: false,
-        cookie: { secure: false, maxAge: 1000 * 60 * 60 * 24 * 7 }
+        cookie: {
+            secure: process.env.NODE_ENV === "production", // Nur HTTPS im Web
+            maxAge: 1000 * 60 * 60 * 24 * 7,
+            sameSite: 'lax'
+        }
     }));
 
+    // --- AUTH ---
     app.post("/api/auth/register", async (req, res) => {
         try {
             const { email, password } = req.body;
@@ -59,18 +67,16 @@ async function startServer() {
         next();
     };
 
+    // --- DATA ---
     app.get("/api/data", requireAuth, async (req: any, res) => {
         const userId = req.session.userId;
         const dbUser = await prisma.user.findUnique({
             where: { id: userId },
             include: { subjects: { include: { deadlines: true } } }
         });
-
-        // WICHTIG: Nur Scores laden, die zum aktuellen User gehören (via Subject)
         const allScores = await prisma.score.findMany({
             where: { subject: { userId: userId } }
         });
-
         const formattedScores: any = {};
         allScores.forEach(s => { formattedScores[`${s.weekId}_${s.subjectId}_${s.type}`] = s.value; });
 
@@ -88,21 +94,17 @@ async function startServer() {
 
         try {
             await prisma.$transaction(async (tx) => {
-                // 1. Nur den eigenen User updaten
                 await tx.user.update({ where: { id: userId }, data: { selectedSemesterId } });
-
-                // 2. Nur Daten des EIGENEN Users löschen
                 await tx.deadline.deleteMany({ where: { subject: { userId } } });
                 await tx.score.deleteMany({ where: { subject: { userId } } });
                 await tx.subject.deleteMany({ where: { userId } });
 
-                // 3. Nur wenn Subjects vorhanden sind (verhindert Leerspeichern bei Fehlern)
-                if (subjects && subjects.length >= 0) {
+                if (subjects) {
                     for (const sub of subjects) {
                         const createdSub = await tx.subject.create({
                             data: {
                                 id: sub.id, name: sub.name, threshold: sub.threshold, semesterId: sub.semesterId,
-                                submissionUrl: sub.submissionUrl, userId, // USERID ERZWUNGEN
+                                submissionUrl: sub.submissionUrl, userId,
                                 deadlines: {
                                     create: (sub.deadlines || []).map((d: any) => ({
                                         id: d.id, title: d.title, date: d.date, completed: !!d.completed,
@@ -111,7 +113,6 @@ async function startServer() {
                             }
                         });
 
-                        // 4. Scores passend zu diesem Subject speichern
                         const scoreEntries = Object.entries(scores || {});
                         for (const [key, value] of scoreEntries) {
                             if (!value) continue;
@@ -120,7 +121,6 @@ async function startServer() {
                             const subIdInKey = parts.pop();
                             const weekId = parts.join("_");
 
-                            // Nur speichern, wenn die ID im Key zum aktuell verarbeiteten Fach gehört
                             if (subIdInKey === sub.id) {
                                 await tx.score.create({
                                     data: { weekId, subjectId: createdSub.id, type: type!, value: String(value) }
@@ -131,22 +131,20 @@ async function startServer() {
                 }
             });
             res.json({ success: true });
-        } catch (error) {
-            console.error("Transaktionsfehler:", error);
-            res.status(500).json({ error: "Speicherfehler" });
-        }
+        } catch (error) { res.status(500).json({ error: "Speicherfehler" }); }
     });
 
+    // --- SERVING ---
     if (process.env.NODE_ENV !== "production") {
         const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
         app.use(vite.middlewares);
     } else {
-        const distPath = path.join(process.cwd(), "dist");
+        const distPath = path.resolve(process.cwd(), "dist");
         app.use(express.static(distPath));
         app.get("*", (req, res) => res.sendFile(path.join(distPath, "index.html")));
     }
 
-    app.listen(PORT, () => console.log(`🚀 Server läuft auf Port ${PORT}`));
+    app.listen(PORT, () => console.log(`🚀 Server online: Port ${PORT}`));
 }
 
 startServer().catch(console.error);
