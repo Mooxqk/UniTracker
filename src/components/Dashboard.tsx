@@ -4,12 +4,12 @@ import { Plus, CheckCircle2, Trash2, ExternalLink, GraduationCap, ArrowRight } f
 import { DeadlinesOverview } from './DeadlinesOverview';
 
 interface DashboardProps {
-  subjects: Subject[];
-  stats: Record<string, SubjectStats>;
-  onSelectCourse: (id: string) => void;
-  onAddCourse: (name: string, threshold: number, maxPoints?: number, rhythm?: number) => void;
-  onDeleteCourse: (id: string) => void;
-  onToggleDeadline: (subjectId: string, deadlineId: string) => void;
+    subjects: Subject[];
+    stats: Record<string, SubjectStats>;
+    onSelectCourse: (id: string) => void;
+    onAddCourse: (name: string, threshold: number, maxPoints?: number, rhythm?: number) => void;
+    onDeleteCourse: (id: string) => void;
+    onToggleDeadline: (subjectId: string, deadlineId: string) => void;
 }
 
 export function Dashboard({ subjects, stats, onSelectCourse, onAddCourse, onDeleteCourse, onToggleDeadline }: DashboardProps) {
@@ -20,22 +20,23 @@ export function Dashboard({ subjects, stats, onSelectCourse, onAddCourse, onDele
   const [newRhythm, setNewRhythm] = useState('1');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  const handleAdd = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newName.trim()) {
-      onAddCourse(
-        newName.trim(), 
-        parseFloat(newThreshold) || 50,
-        newMaxPoints ? parseFloat(newMaxPoints) : undefined,
-        parseInt(newRhythm) || 1
-      );
-      setNewName('');
-      setNewThreshold('50');
-      setNewMaxPoints('');
-      setNewRhythm('1');
-      setIsAdding(false);
-    }
-  };
+    const handleAdd = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (newName.trim()) {
+            onAddCourse(
+                newName.trim(),
+                parseFloat(newThreshold) || 50,
+                newMaxPoints ? parseFloat(newMaxPoints) : undefined, // Hier wird die 40 übergeben
+                parseInt(newRhythm) || 1                             // Hier der Rhythmus
+            );
+            // Felder zurücksetzen
+            setNewName('');
+            setNewThreshold('50');
+            setNewMaxPoints('');
+            setNewRhythm('1');
+            setIsAdding(false);
+        }
+    };
 
   let globalMax = 0;
   let globalAchieved = 0;
