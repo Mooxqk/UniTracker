@@ -110,7 +110,7 @@ export function DeadlinesOverview({
                                                 </div>
 
                                                 <div className={`flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md border shadow-sm w-fit ${
-                                                    currentUrgency === 3 ? 'bg-red-50 text-red-600 border-red-100' :
+                                                    currentUrgency === 1 ? 'bg-red-50 text-red-600 border-red-100' :
                                                         currentUrgency === 2 ? 'bg-amber-50 text-amber-600 border-amber-100' :
                                                             'bg-emerald-50 text-emerald-600 border-emerald-100'
                                                 }`}>
