@@ -87,15 +87,51 @@ export function DeadlinesOverview({
                                                     {deadline.subjectName}
                                                 </p>
                                                 {(() => {
-                                                    const diff = new Date(deadline.date).getTime() - new Date().setHours(0, 0, 0, 0);
-                                                    const diffDays = Math.ceil(diff / (1000 * 60 * 60 * 24));
+                                                    // 1. Sicheres Datumsobjekt ohne Zeitzonen-Fehler erstellen
+                                                    const [year, month, day] = deadline.date.split("-").map(Number);
+                                                    const deadlineDate = new Date(year, month - 1, day); // Lokale Mitternacht
+
+                                                    const now = new Date();
+                                                    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // Heute Mitternacht
+
+                                                    // 2. Reine Kalendertage Differenz berechnen
+                                                    const diffDays = Math.round((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
                                                     let timeStr = "";
                                                     let timeColor = "text-slate-400";
 
-                                                    if (diffDays === 0) { timeStr = "Heute"; timeColor = "text-red-500 font-black animate-pulse"; }
-                                                    else if (diffDays === 1) { timeStr = "Morgen"; timeColor = "text-amber-500 font-bold"; }
-                                                    else if (diffDays < 0) { timeStr = "Überfällig"; timeColor = "text-red-600 font-black"; }
-                                                    else { timeStr = `In ${diffDays} Tagen`; timeColor = "text-indigo-500 font-bold"; }
+                                                    if (diffDays === 0) {
+                                                        // ES IST HEUTE!
+                                                        timeColor = "text-red-500 font-black animate-pulse";
+                                                        timeStr = "Heute";
+
+                                                        // Wenn wir eine Uhrzeit haben, rechnen wir die Stunden aus
+                                                        if (deadline.time) {
+                                                            const [hours, minutes] = deadline.time.split(":").map(Number);
+                                                            const deadlineExact = new Date(year, month - 1, day, hours, minutes);
+
+                                                            const diffHours = (deadlineExact.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+                                                            if (diffHours < 0) {
+                                                                timeStr = "Überfällig";
+                                                                timeColor = "text-red-600 font-black";
+                                                            } else if (diffHours < 24) {
+                                                                timeStr = `Heute in ${Math.ceil(diffHours)} h`;
+                                                            }
+                                                        }
+                                                    }
+                                                    else if (diffDays === 1) {
+                                                        timeStr = "Morgen";
+                                                        timeColor = "text-amber-500 font-bold";
+                                                    }
+                                                    else if (diffDays < 0) {
+                                                        timeStr = "Überfällig";
+                                                        timeColor = "text-red-600 font-black";
+                                                    }
+                                                    else {
+                                                        timeStr = `In ${diffDays} Tagen`;
+                                                        timeColor = "text-indigo-500 font-bold";
+                                                    }
 
                                                     return <span className={`text-[10px] uppercase tracking-wider ${timeColor}`}>{timeStr}</span>;
                                                 })()}
