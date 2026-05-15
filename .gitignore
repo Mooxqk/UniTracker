@@ -20,12 +20,6 @@ dist-ssr/
 .env.test.local
 .env.production.local
 
-# --- Datenbank (SQLite) ---
-# Wir ignorieren die lokale Datenbankdatei, damit Nutzer sich nicht gegenseitig 
-# ihre dev.db überschreiben. Jeder Nutzer/Hoster erstellt seine eigene.
-*.db
-*.db-journal
-
 # --- Build / Vite ---
 # Die kompilierten Dateien werden erst auf dem Server erstellt
 dist/
