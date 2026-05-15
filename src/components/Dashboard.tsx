@@ -170,7 +170,18 @@ export function Dashboard({
                                             <div className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden"><div className={`h-full ${isPassed ? 'bg-emerald-500' : 'bg-indigo-500'}`} style={{ width: `${Math.min(100, s.progressToPass)}%` }}></div></div>
                                         </div>
                                     </div>
-                                    {isPassed ? <span className="text-[9px] font-black text-emerald-700 bg-emerald-100 px-2 py-1 rounded-lg uppercase flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> OK</span> : <span className="text-[9px] font-black text-indigo-700 bg-indigo-50 px-2 py-1 rounded-lg uppercase">Offen</span>}
+
+                                    {/* HIER IST DER GEFIXTE TEIL: */}
+                                    {isPassed ? (
+                                        <span className="text-[9px] font-black text-emerald-700 bg-emerald-100 px-2 py-1 rounded-lg uppercase flex items-center gap-1">
+                                            <CheckCircle2 className="w-3 h-3" /> OK
+                                        </span>
+                                    ) : (
+                                        <span className="text-[9px] font-black text-indigo-700 bg-indigo-50 px-2 py-1 rounded-lg uppercase">
+                                            {s.missingPoints > 0 ? `Noch ${s.missingPoints.toFixed(0)} Pkt (${s.required100PercentSheets} Blätter)` : 'Offen'}
+                                        </span>
+                                    )}
+
                                 </div>
                                 {deleteConfirmId === sub.id && (
                                     <div className="absolute inset-0 bg-white/95 rounded-2xl border-2 border-red-500 z-10 flex flex-col items-center justify-center p-4" onClick={e => e.stopPropagation()}>
