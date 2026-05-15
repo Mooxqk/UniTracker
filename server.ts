@@ -65,27 +65,65 @@ async function startServer() {
         next();
     };
 
+    // --- NEU: Teilen-Endpunkt ---
+    app.post("/api/subjects/:id/share", requireAuth, async (req: any, res) => {
+        try {
+            const { partnerEmail } = req.body;
+            const subjectId = req.params.id;
+            const ownerId = req.session.userId;
+
+            // Prüfen, ob der Kurs einem selbst gehört
+            const subject = await prisma.subject.findFirst({ where: { id: subjectId, userId: ownerId } });
+            if (!subject) return res.status(403).json({ error: "Nur Besitzer können den Kurs teilen." });
+
+            const partner = await prisma.user.findUnique({ where: { email: partnerEmail.toLowerCase() } });
+            if (!partner) return res.status(404).json({ error: "Nutzer nicht gefunden." });
+            if (partner.id === ownerId) return res.status(400).json({ error: "Du kannst den Kurs nicht mit dir selbst teilen." });
+
+            // Verknüpfung erstellen (upsert verhindert Absturz bei doppelter Einladung)
+            await prisma.collaboration.upsert({
+                where: { userId_subjectId: { userId: partner.id, subjectId: subjectId } },
+                update: {},
+                create: { userId: partner.id, subjectId: subjectId }
+            });
+
+            res.json({ success: true });
+        } catch (error) { res.status(500).json({ error: "Fehler beim Teilen" }); }
+    });
+
+    // --- GET DATA (Eigene + Geteilte Kurse laden) ---
     app.get("/api/data", requireAuth, async (req: any, res) => {
         const userId = req.session.userId;
         const dbUser = await prisma.user.findUnique({
             where: { id: userId },
-            include: { subjects: { include: { deadlines: true } } }
+            include: {
+                subjects: { include: { deadlines: true } },
+                collaborations: { include: { subject: { include: { deadlines: true } } } }
+            }
         });
 
+        // Markiere geteilte Kurse für das Frontend
+        const ownedSubjects = (dbUser?.subjects || []).map(s => ({ ...s, isShared: false }));
+        const sharedSubjects = (dbUser?.collaborations || []).map(c => ({ ...c.subject, isShared: true }));
+        const allSubjects = [...ownedSubjects, ...sharedSubjects];
+
+        const allSubjectIds = allSubjects.map(s => s.id);
         const allScores = await prisma.score.findMany({
-            where: { subject: { userId: userId } }
+            where: { subjectId: { in: allSubjectIds } }
         });
+
         const formattedScores: any = {};
         allScores.forEach(s => { formattedScores[`${s.weekId}_${s.subjectId}_${s.type}`] = s.value; });
 
         res.json({
-            subjects: dbUser?.subjects || [],
+            subjects: allSubjects,
             weeks: [],
             scores: formattedScores,
             selectedSemesterId: dbUser?.selectedSemesterId,
         });
     });
 
+    // --- POST DATA (Sicheres Speichern) ---
     app.post("/api/data", requireAuth, async (req: any, res) => {
         const userId = req.session.userId;
         const { subjects, scores, selectedSemesterId } = req.body;
@@ -94,48 +132,56 @@ async function startServer() {
             await prisma.$transaction(async (tx) => {
                 await tx.user.update({ where: { id: userId }, data: { selectedSemesterId } });
 
-                await tx.deadline.deleteMany({ where: { subject: { userId } } });
-                await tx.score.deleteMany({ where: { subject: { userId } } });
-                await tx.subject.deleteMany({ where: { userId } });
+                const ownedIncoming = (subjects || []).filter((s: any) => !s.isShared);
+                const ownedIncomingIds = ownedIncoming.map((s: any) => s.id);
 
-                if (subjects && subjects.length >= 0) {
-                    for (const sub of subjects) {
-                        const createdSub = await tx.subject.create({
-                            data: {
-                                id: sub.id,
-                                name: sub.name,
-                                threshold: sub.threshold,
-                                semesterId: sub.semesterId,
-                                submissionUrl: sub.submissionUrl,
-                                userId,
-                                deadlines: {
-                                    create: (sub.deadlines || []).map((d: any) => ({
-                                        id: d.id,
-                                        title: d.title,
-                                        date: d.date,
-                                        time: d.time || null,
-                                        urgency: d.urgency || 3, // Fallback auf Grün (3)
-                                        completed: !!d.completed,
-                                    }))
-                                }
-                            }
+                // 1. Nur eigene gelöschte Kurse entfernen
+                await tx.subject.deleteMany({
+                    where: { userId: userId, id: { notIn: ownedIncomingIds } }
+                });
+
+                // 2. Eigene Kurse aktualisieren/erstellen
+                for (const sub of ownedIncoming) {
+                    await tx.subject.upsert({
+                        where: { id: sub.id },
+                        update: { name: sub.name, threshold: sub.threshold, submissionUrl: sub.submissionUrl },
+                        create: { id: sub.id, name: sub.name, threshold: sub.threshold, semesterId: sub.semesterId, submissionUrl: sub.submissionUrl, userId }
+                    });
+
+                    // Deadlines für eigene Kurse neu schreiben
+                    await tx.deadline.deleteMany({ where: { subjectId: sub.id } });
+                    if (sub.deadlines && sub.deadlines.length > 0) {
+                        await tx.deadline.createMany({
+                            data: sub.deadlines.map((d: any) => ({
+                                id: d.id, title: d.title, date: d.date, time: d.time || null,
+                                urgency: d.urgency || 3, completed: !!d.completed, subjectId: sub.id
+                            }))
                         });
-
-                        const scoreEntries = Object.entries(scores || {});
-                        for (const [key, value] of scoreEntries) {
-                            if (!value) continue;
-                            const parts = key.split("_");
-                            const type = parts.pop();
-                            const subIdInKey = parts.pop();
-                            const weekId = parts.join("_");
-
-                            if (subIdInKey === sub.id) {
-                                await tx.score.create({
-                                    data: { weekId, subjectId: createdSub.id, type: type!, value: String(value) }
-                                });
-                            }
-                        }
                     }
+                }
+
+                // 3. Scores für ALLE Kurse (eigene + geteilte) aktualisieren
+                const allIncomingSubjectIds = (subjects || []).map((s: any) => s.id);
+                if (allIncomingSubjectIds.length > 0) {
+                    await tx.score.deleteMany({ where: { subjectId: { in: allIncomingSubjectIds } } });
+                }
+
+                const scoreData = [];
+                const scoreEntries = Object.entries(scores || {});
+                for (const [key, value] of scoreEntries) {
+                    if (!value) continue;
+                    const parts = key.split("_");
+                    const type = parts.pop();
+                    const subIdInKey = parts.pop();
+                    const weekId = parts.join("_");
+
+                    if (allIncomingSubjectIds.includes(subIdInKey)) {
+                        scoreData.push({ weekId, subjectId: subIdInKey!, type: type!, value: String(value) });
+                    }
+                }
+
+                if (scoreData.length > 0) {
+                    await tx.score.createMany({ data: scoreData });
                 }
             });
             res.json({ success: true });

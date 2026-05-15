@@ -7,60 +7,27 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// =========================================
-// DEINE TABELLEN
-// =========================================
-
 model User {
-  id                 String    @id @default(uuid())
-  email              String    @unique
-  passwordHash       String    // Später für deinen echten Login
-  selectedProgramId  String    @default("inf")
-  selectedSemesterId String    @default("ss26")
-  
-  // Verknüpfungen (Ein User hat viele Fächer und Wochen)
-  subjects           Subject[]
-  weeks              Week[]
-  
-  createdAt          DateTime  @default(now())
+  id                 String          @id @default(uuid())
+  email              String          @unique
+  passwordHash       String
+  selectedProgramId  String?
+  selectedSemesterId String?
+  subjects           Subject[]       // Eigene Kurse
+  collaborations     Collaboration[] // Kurse von anderen, an denen man mitarbeitet
 }
 
 model Subject {
-  id            String     @id @default(uuid())
+  id            String          @id
   name          String
   threshold     Float
   semesterId    String
   submissionUrl String?
-  
-  // Wem gehört das Fach?
   userId        String
-  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  // Was gehört zu dem Fach?
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   deadlines     Deadline[]
   scores        Score[]
-}
-
-model Week {
-  id         String @id @default(uuid())
-  name       String
-  date       String
-  semesterId String
-  
-  // Wem gehört die Woche?
-  userId     String
-  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model Score {
-  id        String  @id @default(uuid())
-  weekId    String
-  type      String  // "max" oder "achieved"
-  value     String
-  subjectId String
-  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  // Ein optionales userId Feld hilft beim Filtern, ist aber laut deinem
-  // letzten Code nicht zwingend im Score-Model vorhanden.
+  collaborators Collaboration[] // Wer arbeitet hier noch mit?
 }
 
 model Deadline {
@@ -68,8 +35,28 @@ model Deadline {
   title     String
   date      String
   time      String?
-  urgency   Int      @default(3) // 3 ist Grün/Standard
+  urgency   Int      @default(3)
   completed Boolean
   subjectId String
   subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+}
+
+model Score {
+  id        String  @id @default(uuid())
+  weekId    String
+  type      String
+  value     String
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+}
+
+// NEU: Die Verbindungstabelle für Gruppenarbeiten
+model Collaboration {
+  id        String  @id @default(uuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, subjectId]) // Verhindert, dass man jemanden doppelt einlädt
 }

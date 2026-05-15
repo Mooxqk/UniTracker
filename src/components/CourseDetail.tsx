@@ -1,6 +1,6 @@
 import React from 'react';
 import { Subject, Week, Scores, SubjectStats } from '../types';
-import { ArrowLeft, CheckCircle2, Link as LinkIcon, ExternalLink, Trash2, Calculator, Clock } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Link as LinkIcon, ExternalLink, Trash2, Calculator, Clock, Users, Send } from 'lucide-react';
 
 export function CourseDetail({
                                  subject, weeks, scores, stats, onBack, onScoreChange, onUrlChange, onAddDeadline, onDeleteDeadline, onToggleDeadline
@@ -10,6 +10,11 @@ export function CourseDetail({
     const [newDeadlineDate, setNewDeadlineDate] = React.useState('');
     const [newDeadlineTime, setNewDeadlineTime] = React.useState('');
     const [newDeadlineUrgency, setNewDeadlineUrgency] = React.useState<number>(3); // Standard: 3 (Grün)
+
+    // NEU: Share State
+    const [isSharing, setIsSharing] = React.useState(false);
+    const [shareEmail, setShareEmail] = React.useState('');
+    const [shareMessage, setShareMessage] = React.useState<{text: string, type: 'success'|'error'|''} >({text: '', type: ''});
 
     const prioColors: Record<number, string> = { 1: 'bg-red-500', 2: 'bg-amber-400', 3: 'bg-emerald-500' };
     const prioLabels: Record<number, string> = { 1: 'Prio 1', 2: 'Prio 2', 3: 'Prio 3' };
@@ -22,6 +27,31 @@ export function CourseDetail({
             setNewDeadlineDate('');
             setNewDeadlineTime('');
             setNewDeadlineUrgency(3); // Nach dem Speichern wieder auf Grün setzen
+        }
+    };
+
+    // NEU: Share Handler
+    const handleShare = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if(!shareEmail) return;
+
+        try {
+            const res = await fetch(`/api/subjects/${subject.id}/share`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ partnerEmail: shareEmail })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                setShareMessage({ text: 'Kurs geteilt!', type: 'success' });
+                setShareEmail('');
+                setTimeout(() => { setIsSharing(false); setShareMessage({text: '', type: ''}); }, 2000);
+            } else {
+                setShareMessage({ text: data.error || 'Fehler beim Teilen', type: 'error' });
+            }
+        } catch (error) {
+            setShareMessage({ text: 'Netzwerkfehler', type: 'error' });
         }
     };
 
@@ -39,7 +69,15 @@ export function CourseDetail({
                         >
                             <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
                         </button>
-                        <h2 className="text-2xl font-black tracking-tight text-slate-800 truncate">{subject.name}</h2>
+                        <div className="flex-1 min-w-0">
+                            <h2 className="text-2xl font-black tracking-tight text-slate-800 truncate">{subject.name}</h2>
+                            {/* NEU: Badge für geteilte Kurse */}
+                            {subject.isShared && (
+                                <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-md font-bold uppercase mt-1 inline-block">
+                                    Geteilt mit dir
+                                </span>
+                            )}
+                        </div>
                     </div>
 
                     <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
@@ -55,13 +93,52 @@ export function CourseDetail({
                     </div>
 
                     <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
-                        <div className="flex items-center gap-2 mb-4">
-                            <LinkIcon className="w-3.5 h-3.5 text-slate-400" />
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Portal & Termine</p>
+
+                        {/* NEU: Flex-Container für den Teilen-Button */}
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2">
+                                <LinkIcon className="w-3.5 h-3.5 text-slate-400" />
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Portal & Termine</p>
+                            </div>
+                            {!subject.isShared && (
+                                <button
+                                    onClick={() => setIsSharing(!isSharing)}
+                                    className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg hover:bg-indigo-100 transition-colors"
+                                >
+                                    <Users className="w-3 h-3" /> Teilen
+                                </button>
+                            )}
                         </div>
+
+                        {/* NEU: Das Share-Formular */}
+                        {isSharing && !subject.isShared && (
+                            <form onSubmit={handleShare} className="mb-4 p-3 bg-indigo-50 border border-indigo-100 rounded-xl flex flex-col gap-2">
+                                <p className="text-[10px] font-bold text-indigo-800 uppercase">Mit Partner teilen</p>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="email"
+                                        required
+                                        value={shareEmail}
+                                        onChange={e => setShareEmail(e.target.value)}
+                                        placeholder="E-Mail Adresse..."
+                                        className="flex-1 text-xs bg-white border border-indigo-200 rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-indigo-500"
+                                    />
+                                    <button type="submit" className="bg-indigo-600 text-white px-2 rounded-lg hover:bg-indigo-700 transition-colors">
+                                        <Send className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                                {shareMessage.text && (
+                                    <p className={`text-[10px] font-bold ${shareMessage.type === 'error' ? 'text-red-500' : 'text-emerald-600'}`}>
+                                        {shareMessage.text}
+                                    </p>
+                                )}
+                            </form>
+                        )}
+
                         <div className="space-y-4">
                             <div className="flex gap-2">
-                                <input value={subject.submissionUrl || ''} onChange={e => onUrlChange(e.target.value)} placeholder="URL..." className="flex-1 text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500" />
+                                {/* NEU: disabled={subject.isShared} eingefügt, damit Partner die URL nicht aus Versehen löschen */}
+                                <input disabled={subject.isShared} value={subject.submissionUrl || ''} onChange={e => onUrlChange(e.target.value)} placeholder="URL..." className="flex-1 text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50" />
                                 {subject.submissionUrl && <a href={subject.submissionUrl} target="_blank" rel="noopener noreferrer" className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-all"><ExternalLink className="w-4 h-4" /></a>}
                             </div>
 
@@ -74,7 +151,6 @@ export function CourseDetail({
                                     <input required type="date" value={newDeadlineDate} onChange={e => setNewDeadlineDate(e.target.value)} className="w-[45%] text-xs bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 outline-none focus:ring-1 focus:ring-indigo-500" />
                                     <input type="time" value={newDeadlineTime} onChange={e => setNewDeadlineTime(e.target.value)} className="w-[25%] text-xs bg-slate-50 border border-slate-200 rounded-xl px-1 py-2 outline-none focus:ring-1 focus:ring-indigo-500 text-center" />
 
-                                    {/* NEU: DIE 3 PRIO-BUTTONS */}
                                     <div className="flex gap-1 w-[30%]">
                                         {[1, 2, 3].map((prio) => (
                                             <button
