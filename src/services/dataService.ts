@@ -6,6 +6,7 @@ export interface AppData {
     scores: Scores;
     selectedProgramId: string;
     selectedSemesterId: string;
+    pendingInvites?: any[];
 }
 
 const API_URL = '/api/data';

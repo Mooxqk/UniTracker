@@ -8,12 +8,15 @@ export interface Deadline {
 }
 
 export interface Subject {
-  id: string;
-  name: string;
-  threshold: number; // Percentage, e.g., 50
-  submissionUrl?: string;
-  deadlines?: Deadline[];
-  semesterId: string;
+    id: string;
+    name: string;
+    threshold: number;
+    semesterId: string;
+    submissionUrl?: string | null;
+    deadlines?: Deadline[];
+
+    // --- NEU ---
+    isShared?: boolean;
 }
 
 export interface Week {

@@ -16,6 +16,9 @@ export default function App() {
     const [selectedSemesterId, setSelectedSemesterId] = useState<string>(INITIAL_SEMESTERS[1].id);
     const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
 
+    // NEU: State für ausstehende Einladungen
+    const [pendingInvites, setPendingInvites] = useState<any[]>([]);
+
     const currentSemesterWeeks: Week[] = (SEMESTER_WEEKS[selectedSemesterId] || []).map((w, index) => ({
         id: `w_${selectedSemesterId}_${index + 1}`,
         name: w.name,
@@ -39,6 +42,18 @@ export default function App() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [selectedSubjectId]);
 
+    // NEU: Hilfsfunktion zum Laden der Daten (wird beim Start und nach dem Akzeptieren genutzt)
+    const loadServerData = async () => {
+        const serverData = await dataService.fetchData();
+        if (serverData) {
+            setSubjects(serverData.subjects || []);
+            setScores(serverData.scores || {});
+            setSelectedSemesterId(serverData.selectedSemesterId || INITIAL_SEMESTERS[1].id);
+            // Zieht die offenen Einladungen aus dem Backend (falls vorhanden)
+            setPendingInvites(serverData.pendingInvites || []);
+        }
+    };
+
     useEffect(() => {
         async function checkAuth() {
             try {
@@ -46,12 +61,7 @@ export default function App() {
                 const data = await res.json();
                 if (data.loggedIn) {
                     setUser({ email: data.email });
-                    const serverData = await dataService.fetchData();
-                    if (serverData) {
-                        setSubjects(serverData.subjects || []);
-                        setScores(serverData.scores || {});
-                        setSelectedSemesterId(serverData.selectedSemesterId || INITIAL_SEMESTERS[1].id);
-                    }
+                    await loadServerData(); // Nutzt jetzt die Hilfsfunktion
                 }
             } catch (err) { console.error(err); } finally { setLoading(false); }
         }
@@ -66,10 +76,25 @@ export default function App() {
 
     const handleLogout = async () => {
         setSubjects([]);
-        setScores({});
+        setScores([]);
+        setPendingInvites([]);
         setUser(null);
         await fetch('/api/auth/logout', { method: 'POST' });
         window.location.reload();
+    };
+
+    // NEU: Handler für das Beantworten von Einladungen
+    const handleRespondInvite = async (subjectId: string, accept: boolean) => {
+        try {
+            await fetch('/api/invites/respond', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ subjectId, accept })
+            });
+            await loadServerData(); // Lädt alles neu, damit der akzeptierte Kurs im Dashboard auftaucht
+        } catch (error) {
+            console.error("Fehler beim Beantworten der Einladung", error);
+        }
     };
 
     const stats = calculateSummary(subjects, currentSemesterWeeks, scores);
@@ -119,11 +144,16 @@ export default function App() {
                     />
                 ) : (
                     <Dashboard
-                        subjects={currentSemesterSubjects} stats={stats} onSelectCourse={setSelectedSubjectId}
+                        subjects={currentSemesterSubjects}
+                        stats={stats}
+                        pendingInvites={pendingInvites} // NEU
+                        onRespondInvite={handleRespondInvite} // NEU
+                        onSelectCourse={setSelectedSubjectId}
                         onAddCourse={(name, threshold, maxPoints, rhythm) => {
                             const newSubjectId = `c${Date.now()}`;
                             const defaultMaxPoints = maxPoints ? String(maxPoints) : "0";
-                            const newSubject: Subject = { id: newSubjectId, name, threshold: threshold || 50, semesterId: selectedSemesterId, deadlines: [] };
+                            // NEU: isShared: false sicherheitshalber hinzugefügt
+                            const newSubject: Subject = { id: newSubjectId, name, threshold: threshold || 50, semesterId: selectedSemesterId, deadlines: [], isShared: false };
                             const newScoresForCourse: Scores = {};
                             currentSemesterWeeks.forEach((week, index) => {
                                 const maxKey = `${week.id}_${newSubjectId}_max`;
