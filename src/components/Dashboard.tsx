@@ -133,22 +133,48 @@ export function Dashboard({
             <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="text-lg font-bold text-slate-800">Deine Kurse</h3>
-                    <button onClick={() => setIsAdding(!isAdding)} className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 transition-colors"><Plus className="w-5 h-5" /></button>
+                    <button onClick={() => setIsAdding(!isAdding)} className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 transition-colors">
+                        <Plus className={`w-5 h-5 transition-transform duration-300 ${isAdding ? 'rotate-45' : ''}`} />
+                    </button>
                 </div>
 
                 {isAdding && (
-                    <form onSubmit={handleAdd} className="mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col gap-4">
+                    <motion.form
+                        initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                        animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
+                        onSubmit={handleAdd}
+                        className="mb-8 p-5 bg-slate-50/80 backdrop-blur-sm rounded-2xl border border-slate-200 flex flex-col gap-4 shadow-sm"
+                    >
                         <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                            <input required value={newName} onChange={e => setNewName(e.target.value)} className="md:col-span-5 bg-white p-2 rounded-xl border border-slate-200 text-sm font-medium" placeholder="Kursname..." />
-                            <input required value={newThreshold} onChange={e => setNewThreshold(e.target.value)} type="number" className="md:col-span-3 bg-white p-2 rounded-xl border border-slate-200 text-sm font-medium" placeholder="Zulassung (%)" />
-                            <input value={newMaxPoints} onChange={e => setNewMaxPoints(e.target.value)} type="number" className="md:col-span-2 bg-white p-2 rounded-xl border border-slate-200 text-sm font-medium" placeholder="Max Pkt" />
-                            <select value={newRhythm} onChange={e => setNewRhythm(e.target.value)} className="md:col-span-2 bg-white p-2 rounded-xl border border-slate-200 text-sm font-medium outline-none cursor-pointer">
-                                <option value="1">Wöchentlich</option>
-                                <option value="2">2-Wöchentlich</option>
-                            </select>
+                            <input required value={newName} onChange={e => setNewName(e.target.value)} className="md:col-span-6 bg-white p-2.5 rounded-xl border border-slate-200 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all" placeholder="Kursname..." />
+                            <input required value={newThreshold} onChange={e => setNewThreshold(e.target.value)} type="number" className="md:col-span-3 bg-white p-2.5 rounded-xl border border-slate-200 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all" placeholder="Zulassung (%)" />
+                            <input value={newMaxPoints} onChange={e => setNewMaxPoints(e.target.value)} type="number" className="md:col-span-3 bg-white p-2.5 rounded-xl border border-slate-200 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all" placeholder="Max Pkt / Blatt" />
                         </div>
-                        <button type="submit" className="bg-indigo-600 text-white py-2 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-indigo-700">Hinzufügen</button>
-                    </form>
+
+                        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-2 pt-4 border-t border-slate-200/60">
+                            <div className="flex items-center w-full sm:w-auto bg-slate-200/50 p-1 rounded-xl">
+                                <button
+                                    type="button"
+                                    onClick={() => setNewRhythm('1')}
+                                    className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${newRhythm === '1' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    Wöchentlich
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setNewRhythm('2')}
+                                    className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${newRhythm === '2' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    2-Wöchentlich
+                                </button>
+                            </div>
+
+                            <button type="submit" className="w-full sm:w-auto bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-indigo-700 hover:shadow-md transition-all flex items-center justify-center gap-2">
+                                <Plus className="w-4 h-4" />
+                                Hinzufügen
+                            </button>
+                        </div>
+                    </motion.form>
                 )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
