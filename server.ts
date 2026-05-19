@@ -68,7 +68,6 @@ async function startServer() {
 
     // --- COLLABORATION ENDPOINTS ---
 
-    // Einladung senden
     app.post("/api/subjects/:id/share", requireAuth, async (req: any, res) => {
         try {
             const { partnerEmail } = req.body;
@@ -92,7 +91,26 @@ async function startServer() {
         } catch (error) { res.status(500).json({ error: "Fehler beim Teilen" }); }
     });
 
-    // Einladung beantworten
+    app.post("/api/subjects/:id/unshare", requireAuth, async (req: any, res) => {
+        try {
+            const { partnerEmail } = req.body;
+            const subjectId = req.params.id;
+            const ownerId = req.session.userId;
+
+            const subject = await prisma.subject.findFirst({ where: { id: subjectId, userId: ownerId } });
+            if (!subject) return res.status(403).json({ error: "Nur Besitzer können die Freigabe beenden." });
+
+            const partner = await prisma.user.findUnique({ where: { email: partnerEmail.toLowerCase() } });
+            if (!partner) return res.status(404).json({ error: "Nutzer nicht gefunden." });
+
+            await prisma.collaboration.delete({
+                where: { userId_subjectId: { userId: partner.id, subjectId } }
+            });
+
+            res.json({ success: true });
+        } catch (error) { res.status(500).json({ error: "Fehler beim Beenden des Teilens" }); }
+    });
+
     app.post("/api/invites/respond", requireAuth, async (req: any, res) => {
         try {
             const userId = req.session.userId;
@@ -119,21 +137,34 @@ async function startServer() {
         const dbUser = await prisma.user.findUnique({
             where: { id: userId },
             include: {
-                subjects: { include: { deadlines: true } },
+                subjects: {
+                    include: {
+                        deadlines: true,
+                        collaborators: { include: { user: true } }
+                    }
+                },
                 collaborations: { include: { subject: { include: { deadlines: true, user: true } } } }
             }
         });
 
         const allCollabs = dbUser?.collaborations || [];
 
-        // Akzeptierte Kurse
-        const ownedSubjects = (dbUser?.subjects || []).map(s => ({ ...s, isShared: false }));
+        const ownedSubjects = (dbUser?.subjects || []).map(s => ({
+            ...s,
+            isShared: false,
+            collaborators: s.collaborators.map(c => ({ email: c.user.email, status: c.status }))
+        }));
+
         const sharedSubjects = allCollabs
             .filter(c => c.status === "ACCEPTED")
-            .map(c => ({ ...c.subject, isShared: true }));
+            .map(c => ({
+                ...c.subject,
+                isShared: true,
+                collaborators: []
+            }));
+
         const allSubjects = [...ownedSubjects, ...sharedSubjects];
 
-        // Offene Einladungen
         const pendingInvites = allCollabs
             .filter(c => c.status === "PENDING")
             .map(c => ({
@@ -170,12 +201,17 @@ async function startServer() {
                 const ownedIncoming = (subjects || []).filter((s: any) => !s.isShared);
                 const ownedIds = ownedIncoming.map((s: any) => s.id);
 
-                // 1. Eigene gelöschte Kurse entfernen
                 await tx.subject.deleteMany({
                     where: { userId, id: { notIn: ownedIds } }
                 });
 
-                // 2. Eigene Kurse & Deadlines upserten
+                const sharedIncoming = (subjects || []).filter((s: any) => s.isShared);
+                const sharedIds = sharedIncoming.map((s: any) => s.id);
+                await tx.collaboration.deleteMany({
+                    where: { userId, status: "ACCEPTED", subjectId: { notIn: sharedIds } }
+                });
+
+                // 1. Eigene Kurse upserten
                 for (const sub of ownedIncoming) {
                     await tx.subject.upsert({
                         where: { id: sub.id },
@@ -194,7 +230,31 @@ async function startServer() {
                     }
                 }
 
-                // 3. Scores für alle (eigene + geteilte)
+                // 2. Geteilte Kurse updaten (URL, Threshold und Deadlines)
+                for (const sub of sharedIncoming) {
+                    const collab = await tx.collaboration.findUnique({
+                        where: { userId_subjectId: { userId, subjectId: sub.id } }
+                    });
+
+                    if (collab && collab.status === "ACCEPTED") {
+                        await tx.subject.update({
+                            where: { id: sub.id },
+                            data: { threshold: sub.threshold, submissionUrl: sub.submissionUrl }
+                        });
+
+                        await tx.deadline.deleteMany({ where: { subjectId: sub.id } });
+                        if (sub.deadlines?.length > 0) {
+                            await tx.deadline.createMany({
+                                data: sub.deadlines.map((d: any) => ({
+                                    id: d.id, title: d.title, date: d.date, time: d.time || null,
+                                    urgency: d.urgency || 3, completed: !!d.completed, subjectId: sub.id
+                                }))
+                            });
+                        }
+                    }
+                }
+
+                // 3. Scores für alle aktualisieren
                 const allSubIds = (subjects || []).map((s: any) => s.id);
                 if (allSubIds.length > 0) {
                     await tx.score.deleteMany({ where: { subjectId: { in: allSubIds } } });
@@ -213,7 +273,10 @@ async function startServer() {
                 }
             });
             res.json({ success: true });
-        } catch (error) { res.status(500).json({ error: "Speicherfehler" }); }
+        } catch (error) {
+            console.error("Speicherfehler:", error);
+            res.status(500).json({ error: "Speicherfehler" });
+        }
     });
 
     if (process.env.NODE_ENV !== "production") {

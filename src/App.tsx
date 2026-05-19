@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { INITIAL_SEMESTERS, SEMESTER_WEEKS } from './constants';
 import { Scores, Subject, Week } from './types';
 import { calculateSummary } from './utils';
-import { Loader2, Calendar } from 'lucide-react';
+import { Loader2, Calendar, RefreshCw } from 'lucide-react';
 import { Dashboard } from './components/Dashboard';
 import { CourseDetail } from './components/CourseDetail';
 import { Auth } from './components/Auth';
@@ -10,13 +10,12 @@ import { dataService } from './services/dataService';
 
 export default function App() {
     const [loading, setLoading] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const [user, setUser] = useState<{ email: string } | null>(null);
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [scores, setScores] = useState<Scores>({});
     const [selectedSemesterId, setSelectedSemesterId] = useState<string>(INITIAL_SEMESTERS[1].id);
     const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
-
-    // NEU: State für ausstehende Einladungen
     const [pendingInvites, setPendingInvites] = useState<any[]>([]);
 
     const currentSemesterWeeks: Week[] = (SEMESTER_WEEKS[selectedSemesterId] || []).map((w, index) => ({
@@ -26,10 +25,8 @@ export default function App() {
         semesterId: selectedSemesterId
     }));
 
-    // --- KEYBOARD SHORTCUTS ---
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
-            // ESC -> Schließt Kurs-Details, außer man tippt gerade in einem Input-Feld
             if (event.key === 'Escape') {
                 const isTyping = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
                 if (selectedSubjectId && !isTyping) {
@@ -37,21 +34,24 @@ export default function App() {
                 }
             }
         };
-
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [selectedSubjectId]);
 
-    // NEU: Hilfsfunktion zum Laden der Daten (wird beim Start und nach dem Akzeptieren genutzt)
     const loadServerData = async () => {
         const serverData = await dataService.fetchData();
         if (serverData) {
             setSubjects(serverData.subjects || []);
             setScores(serverData.scores || {});
             setSelectedSemesterId(serverData.selectedSemesterId || INITIAL_SEMESTERS[1].id);
-            // Zieht die offenen Einladungen aus dem Backend (falls vorhanden)
             setPendingInvites(serverData.pendingInvites || []);
         }
+    };
+
+    const handleManualRefresh = async () => {
+        setIsRefreshing(true);
+        await loadServerData();
+        setTimeout(() => setIsRefreshing(false), 500);
     };
 
     useEffect(() => {
@@ -61,7 +61,7 @@ export default function App() {
                 const data = await res.json();
                 if (data.loggedIn) {
                     setUser({ email: data.email });
-                    await loadServerData(); // Nutzt jetzt die Hilfsfunktion
+                    await loadServerData();
                 }
             } catch (err) { console.error(err); } finally { setLoading(false); }
         }
@@ -69,10 +69,10 @@ export default function App() {
     }, []);
 
     useEffect(() => {
-        if (user && !loading && (subjects.length > 0 || Object.keys(scores).length > 0)) {
+        if (user && !loading && !isRefreshing && (subjects.length > 0 || Object.keys(scores).length > 0)) {
             dataService.saveData({ subjects, weeks: [], scores, selectedProgramId: "inf", selectedSemesterId });
         }
-    }, [subjects, scores, selectedSemesterId, user, loading]);
+    }, [subjects, scores, selectedSemesterId, user, loading, isRefreshing]);
 
     const handleLogout = async () => {
         setSubjects([]);
@@ -83,7 +83,6 @@ export default function App() {
         window.location.reload();
     };
 
-    // NEU: Handler für das Beantworten von Einladungen
     const handleRespondInvite = async (subjectId: string, accept: boolean) => {
         try {
             await fetch('/api/invites/respond', {
@@ -91,7 +90,7 @@ export default function App() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ subjectId, accept })
             });
-            await loadServerData(); // Lädt alles neu, damit der akzeptierte Kurs im Dashboard auftaucht
+            await loadServerData();
         } catch (error) {
             console.error("Fehler beim Beantworten der Einladung", error);
         }
@@ -123,6 +122,13 @@ export default function App() {
                                 </select>
                             </div>
                         )}
+                        <button
+                            onClick={handleManualRefresh}
+                            title="Daten vom Server neu laden"
+                            className={`text-slate-400 hover:text-indigo-600 transition-colors ${isRefreshing ? 'animate-spin text-indigo-600' : ''}`}
+                        >
+                            <RefreshCw className="w-4 h-4" />
+                        </button>
                         <button onClick={handleLogout} className="text-[10px] font-bold uppercase text-slate-400 hover:text-red-500 transition-colors">Logout</button>
                     </div>
                 </div>
@@ -133,6 +139,7 @@ export default function App() {
                     <CourseDetail
                         subject={selectedSubject} weeks={currentSemesterWeeks} scores={scores} stats={stats[selectedSubject.id]}
                         onBack={() => setSelectedSubjectId(null)}
+                        onRefresh={loadServerData}
                         onScoreChange={(weekId, type, value) => { setScores(prev => ({ ...prev, [`${weekId}_${selectedSubject.id}_${type}`]: value })); }}
                         onThresholdChange={(v) => { setSubjects(subjects.map(s => s.id === selectedSubject.id ? {...s, threshold: parseFloat(v) || 0} : s)); }}
                         onUrlChange={(v) => { setSubjects(subjects.map(s => s.id === selectedSubject.id ? {...s, submissionUrl: v} : s)); }}
@@ -146,14 +153,13 @@ export default function App() {
                     <Dashboard
                         subjects={currentSemesterSubjects}
                         stats={stats}
-                        pendingInvites={pendingInvites} // NEU
-                        onRespondInvite={handleRespondInvite} // NEU
+                        pendingInvites={pendingInvites}
+                        onRespondInvite={handleRespondInvite}
                         onSelectCourse={setSelectedSubjectId}
                         onAddCourse={(name, threshold, maxPoints, rhythm) => {
                             const newSubjectId = `c${Date.now()}`;
                             const defaultMaxPoints = maxPoints ? String(maxPoints) : "0";
-                            // NEU: isShared: false sicherheitshalber hinzugefügt
-                            const newSubject: Subject = { id: newSubjectId, name, threshold: threshold || 50, semesterId: selectedSemesterId, deadlines: [], isShared: false };
+                            const newSubject: Subject = { id: newSubjectId, name, threshold: threshold || 50, semesterId: selectedSemesterId, deadlines: [], isShared: false, collaborators: [] };
                             const newScoresForCourse: Scores = {};
                             currentSemesterWeeks.forEach((week, index) => {
                                 const maxKey = `${week.id}_${newSubjectId}_max`;

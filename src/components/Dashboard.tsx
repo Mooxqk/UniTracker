@@ -7,12 +7,12 @@ import { motion } from 'motion/react';
 interface DashboardProps {
     subjects: Subject[];
     stats: Record<string, SubjectStats>;
-    pendingInvites: any[]; // NEU
+    pendingInvites: any[];
     onSelectCourse: (id: string) => void;
     onAddCourse: (name: string, threshold: number, maxPoints?: number, rhythm?: number) => void;
     onDeleteCourse: (id: string) => void;
     onToggleDeadline: (subjectId: string, deadlineId: string) => void;
-    onRespondInvite: (subjectId: string, accept: boolean) => void; // NEU
+    onRespondInvite: (subjectId: string, accept: boolean) => void;
 }
 
 export function Dashboard({
@@ -42,7 +42,7 @@ export function Dashboard({
     return (
         <div className="flex-1 flex flex-col gap-6">
 
-            {/* --- NEU: EINLADUNGS-SECTION --- */}
+            {/* --- EINLADUNGS-SECTION --- */}
             {pendingInvites && pendingInvites.length > 0 && (
                 <motion.div
                     initial={{ opacity: 0, y: -20 }}
@@ -139,9 +139,13 @@ export function Dashboard({
                 {isAdding && (
                     <form onSubmit={handleAdd} className="mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col gap-4">
                         <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                            <input required value={newName} onChange={e => setNewName(e.target.value)} className="md:col-span-6 bg-white p-2 rounded-xl border border-slate-200 text-sm font-medium" placeholder="Kursname..." />
-                            <input required value={newThreshold} onChange={e => setNewThreshold(e.target.value)} type="number" className="md:col-span-4 bg-white p-2 rounded-xl border border-slate-200 text-sm font-medium" placeholder="Zulassung (%)" />
+                            <input required value={newName} onChange={e => setNewName(e.target.value)} className="md:col-span-5 bg-white p-2 rounded-xl border border-slate-200 text-sm font-medium" placeholder="Kursname..." />
+                            <input required value={newThreshold} onChange={e => setNewThreshold(e.target.value)} type="number" className="md:col-span-3 bg-white p-2 rounded-xl border border-slate-200 text-sm font-medium" placeholder="Zulassung (%)" />
                             <input value={newMaxPoints} onChange={e => setNewMaxPoints(e.target.value)} type="number" className="md:col-span-2 bg-white p-2 rounded-xl border border-slate-200 text-sm font-medium" placeholder="Max Pkt" />
+                            <select value={newRhythm} onChange={e => setNewRhythm(e.target.value)} className="md:col-span-2 bg-white p-2 rounded-xl border border-slate-200 text-sm font-medium outline-none cursor-pointer">
+                                <option value="1">Wöchentlich</option>
+                                <option value="2">2-Wöchentlich</option>
+                            </select>
                         </div>
                         <button type="submit" className="bg-indigo-600 text-white py-2 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-indigo-700">Hinzufügen</button>
                     </form>
@@ -152,9 +156,7 @@ export function Dashboard({
                         const s = stats[sub.id]; const isPassed = s.progressToPass >= 100;
                         return (
                             <div key={sub.id} className="group relative p-5 rounded-2xl bg-white border border-slate-200 hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer flex flex-col" onClick={() => onSelectCourse(sub.id)}>
-                                {!sub.isShared && (
-                                    <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(sub.id); }} className="absolute top-4 right-4 text-slate-300 hover:text-red-500 md:opacity-0 group-hover:opacity-100 p-2"><Trash2 className="w-4 h-4" /></button>
-                                )}
+                                <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(sub.id); }} className="absolute top-4 right-4 text-slate-300 hover:text-red-500 md:opacity-0 group-hover:opacity-100 p-2"><Trash2 className="w-4 h-4" /></button>
                                 <div className="flex items-center gap-3 mb-4">
                                     <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${isPassed ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all'}`}><GraduationCap className="w-5 h-5" /></div>
                                     <div>
@@ -171,7 +173,6 @@ export function Dashboard({
                                         </div>
                                     </div>
 
-                                    {/* HIER IST DER GEFIXTE TEIL: */}
                                     {isPassed ? (
                                         <span className="text-[9px] font-black text-emerald-700 bg-emerald-100 px-2 py-1 rounded-lg uppercase flex items-center gap-1">
                                             <CheckCircle2 className="w-3 h-3" /> OK
@@ -185,8 +186,8 @@ export function Dashboard({
                                 </div>
                                 {deleteConfirmId === sub.id && (
                                     <div className="absolute inset-0 bg-white/95 rounded-2xl border-2 border-red-500 z-10 flex flex-col items-center justify-center p-4" onClick={e => e.stopPropagation()}>
-                                        <p className="text-red-700 font-bold text-xs mb-3">"{sub.name}" löschen?</p>
-                                        <div className="flex gap-2 w-full"><button className="flex-1 bg-red-600 text-white py-2 rounded-xl font-bold text-[10px]" onClick={() => onDeleteCourse(sub.id)}>LÖSCHEN</button><button className="flex-1 bg-slate-200 text-slate-700 py-2 rounded-xl font-bold text-[10px]" onClick={() => setDeleteConfirmId(null)}>STOP</button></div>
+                                        <p className="text-red-700 font-bold text-xs mb-3">"{sub.name}" {sub.isShared ? "verlassen" : "löschen"}?</p>
+                                        <div className="flex gap-2 w-full"><button className="flex-1 bg-red-600 text-white py-2 rounded-xl font-bold text-[10px]" onClick={() => onDeleteCourse(sub.id)}>ENTFERNEN</button><button className="flex-1 bg-slate-200 text-slate-700 py-2 rounded-xl font-bold text-[10px]" onClick={() => setDeleteConfirmId(null)}>STOP</button></div>
                                     </div>
                                 )}
                             </div>

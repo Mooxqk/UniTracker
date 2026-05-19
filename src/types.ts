@@ -1,10 +1,10 @@
 export interface Deadline {
-  id: string;
-  title: string;
-  date: string;
-  time?: string;
-  urgency?: number; // 1: Low, 2: Medium, 3: High
-  completed: boolean;
+    id: string;
+    title: string;
+    date: string;
+    time?: string;
+    urgency?: number; // 1: Low, 2: Medium, 3: High
+    completed: boolean;
 }
 
 export interface Subject {
@@ -17,37 +17,38 @@ export interface Subject {
 
     // --- NEU ---
     isShared?: boolean;
+    collaborators?: { email: string; status: string }[];
 }
 
 export interface Week {
-  id: string;
-  name: string;
-  date: string;
-  semesterId: string;
+    id: string;
+    name: string;
+    date: string;
+    semesterId: string;
 }
 
 export interface Semester {
-  id: string;
-  name: string;
-  startDate: string; // ISO format or similar to parse
+    id: string;
+    name: string;
+    startDate: string;
 }
 
 export interface Program {
-  id: string;
-  name: string;
+    id: string;
+    name: string;
 }
 
 export type ScoreType = 'max' | 'achieved';
 
-export type Scores = Record<string, string>; // Key: `{weekId}_{subjectId}_{type}`, Value: 'number as string or empty'
+export type Scores = Record<string, string>;
 
 export interface SubjectStats {
-  maxTotal: number;
-  achievedTotal: number;
-  requiredPoints: number;
-  totalQuote: number;
-  progressToPass: number;
-  workedSheetsQuote: number;
-  missingPoints: number;
-  required100PercentSheets: number;
+    maxTotal: number;
+    achievedTotal: number;
+    requiredPoints: number;
+    totalQuote: number;
+    progressToPass: number;
+    workedSheetsQuote: number;
+    missingPoints: number;
+    required100PercentSheets: number;
 }
