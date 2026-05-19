@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Subject, SubjectStats } from '../types';
 import { Plus, CheckCircle2, Trash2, ExternalLink, GraduationCap, ArrowRight } from 'lucide-react';
 import { DeadlinesOverview } from './DeadlinesOverview';
-import { motion, AnimatePresence } from 'motion/react'; // <-- NEU: AnimatePresence importiert
+import { motion, AnimatePresence } from 'motion/react';
 
 interface DashboardProps {
     subjects: Subject[];
@@ -138,47 +138,50 @@ export function Dashboard({
                     </button>
                 </div>
 
-                {/* NEU: AnimatePresence für Exit-Animation */}
                 <AnimatePresence>
                     {isAdding && (
-                        <motion.form
-                            initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                            animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
-                            exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                        <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
                             transition={{ duration: 0.3, ease: "easeInOut" }}
-                            onSubmit={handleAdd}
-                            className="mb-8 p-5 bg-slate-50/80 backdrop-blur-sm rounded-2xl border border-slate-200 flex flex-col gap-4 shadow-sm"
+                            className="overflow-hidden"
                         >
-                            <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                                <input required value={newName} onChange={e => setNewName(e.target.value)} className="md:col-span-6 bg-white p-2.5 rounded-xl border border-slate-200 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all" placeholder="Kursname..." />
-                                <input required value={newThreshold} onChange={e => setNewThreshold(e.target.value)} type="number" className="md:col-span-3 bg-white p-2.5 rounded-xl border border-slate-200 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all" placeholder="Zulassung (%)" />
-                                <input value={newMaxPoints} onChange={e => setNewMaxPoints(e.target.value)} type="number" className="md:col-span-3 bg-white p-2.5 rounded-xl border border-slate-200 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all" placeholder="Max Pkt / Blatt" />
-                            </div>
-
-                            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-2 pt-4 border-t border-slate-200/60">
-                                <div className="flex items-center w-full sm:w-auto bg-slate-200/50 p-1 rounded-xl">
-                                    <button
-                                        type="button"
-                                        onClick={() => setNewRhythm('1')}
-                                        className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${newRhythm === '1' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                                    >
-                                        Wöchentlich
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setNewRhythm('2')}
-                                        className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${newRhythm === '2' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                                    >
-                                        2-Wöchentlich
-                                    </button>
+                            <form
+                                onSubmit={handleAdd}
+                                className="mb-6 p-5 bg-slate-50/80 backdrop-blur-sm rounded-2xl border border-slate-200 flex flex-col gap-4 shadow-sm"
+                            >
+                                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                                    <input required value={newName} onChange={e => setNewName(e.target.value)} className="md:col-span-6 bg-white p-2.5 rounded-xl border border-slate-200 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all" placeholder="Kursname..." />
+                                    <input required value={newThreshold} onChange={e => setNewThreshold(e.target.value)} type="number" className="md:col-span-3 bg-white p-2.5 rounded-xl border border-slate-200 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all" placeholder="Zulassung (%)" />
+                                    <input value={newMaxPoints} onChange={e => setNewMaxPoints(e.target.value)} type="number" className="md:col-span-3 bg-white p-2.5 rounded-xl border border-slate-200 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all" placeholder="Max Pkt / Blatt" />
                                 </div>
 
-                                <button type="submit" className="w-full sm:w-auto bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-indigo-700 hover:shadow-md transition-all flex items-center justify-center gap-2">
-                                    <Plus className="w-4 h-4" />
-                                    Hinzufügen
-                                </button>
-                            </div>
-                        </motion.form>
+                                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-2 pt-4 border-t border-slate-200/60">
+                                    <div className="flex items-center w-full sm:w-auto bg-slate-200/50 p-1 rounded-xl">
+                                        <button
+                                            type="button"
+                                            onClick={() => setNewRhythm('1')}
+                                            className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${newRhythm === '1' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                        >
+                                            Wöchentlich
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setNewRhythm('2')}
+                                            className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${newRhythm === '2' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                        >
+                                            2-Wöchentlich
+                                        </button>
+                                    </div>
+
+                                    <button type="submit" className="w-full sm:w-auto bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-indigo-700 hover:shadow-md transition-all flex items-center justify-center gap-2">
+                                        <Plus className="w-4 h-4" />
+                                        Hinzufügen
+                                    </button>
+                                </div>
+                            </form>
+                        </motion.div>
                     )}
                 </AnimatePresence>
 
