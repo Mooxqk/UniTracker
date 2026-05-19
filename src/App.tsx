@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { INITIAL_SEMESTERS, SEMESTER_WEEKS } from './constants';
 import { Scores, Subject, Week } from './types';
 import { calculateSummary } from './utils';
-import { Loader2, Calendar, RefreshCw } from 'lucide-react';
+import { Loader2, Calendar, RefreshCw, AlertTriangle } from 'lucide-react';
 import { Dashboard } from './components/Dashboard';
 import { CourseDetail } from './components/CourseDetail';
 import { Auth } from './components/Auth';
@@ -11,6 +11,7 @@ import { dataService } from './services/dataService';
 export default function App() {
     const [loading, setLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [showDeleteAccount, setShowDeleteAccount] = useState(false);
     const [user, setUser] = useState<{ email: string } | null>(null);
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [scores, setScores] = useState<Scores>({});
@@ -83,6 +84,15 @@ export default function App() {
         window.location.reload();
     };
 
+    const handleDeleteAccount = async () => {
+        try {
+            await fetch('/api/auth/account', { method: 'DELETE' });
+            window.location.reload();
+        } catch (error) {
+            console.error("Fehler beim Löschen des Accounts", error);
+        }
+    };
+
     const handleRespondInvite = async (subjectId: string, accept: boolean) => {
         try {
             await fetch('/api/invites/respond', {
@@ -129,12 +139,13 @@ export default function App() {
                         >
                             <RefreshCw className="w-4 h-4" />
                         </button>
-                        <button onClick={handleLogout} className="text-[10px] font-bold uppercase text-slate-400 hover:text-red-500 transition-colors">Logout</button>
+                        <button onClick={() => setShowDeleteAccount(true)} className="text-[10px] font-bold uppercase text-red-400 hover:text-red-600 transition-colors">Account löschen</button>
+                        <button onClick={handleLogout} className="text-[10px] font-bold uppercase text-slate-500 hover:text-slate-700 transition-colors">Logout</button>
                     </div>
                 </div>
             </header>
 
-            <main className="max-w-6xl mx-auto px-6 mt-8">
+            <main className="max-w-6xl mx-auto px-6 mt-8 relative">
                 {selectedSubject ? (
                     <CourseDetail
                         subject={selectedSubject} weeks={currentSemesterWeeks} scores={scores} stats={stats[selectedSubject.id]}
@@ -179,6 +190,28 @@ export default function App() {
                         }}
                         onToggleDeadline={(subId, dId) => { setSubjects(subjects.map(s => { if (s.id !== subId) return s; return { ...s, deadlines: s.deadlines?.map(d => d.id === dId ? { ...d, completed: !d.completed } : d) }; })); }}
                     />
+                )}
+
+                {showDeleteAccount && (
+                    <div className="fixed inset-0 z-[200] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+                        <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-red-100 flex flex-col items-center text-center">
+                            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4">
+                                <AlertTriangle className="w-6 h-6" />
+                            </div>
+                            <h3 className="text-lg font-black text-slate-800 mb-2">Account löschen?</h3>
+                            <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+                                Diese Aktion kann <strong>nicht rückgängig</strong> gemacht werden. Alle deine eigenen Kurse, Noten und Freigaben werden unwiderruflich gelöscht.
+                            </p>
+                            <div className="flex gap-3 w-full">
+                                <button onClick={() => setShowDeleteAccount(false)} className="flex-1 bg-slate-100 text-slate-700 py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-200 transition-colors">
+                                    Abbrechen
+                                </button>
+                                <button onClick={handleDeleteAccount} className="flex-1 bg-red-600 text-white py-3 rounded-xl font-bold text-xs uppercase tracking-widest shadow-sm hover:bg-red-700 transition-colors">
+                                    Löschen
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 )}
             </main>
         </div>

@@ -61,6 +61,22 @@ async function startServer() {
         req.session.destroy(() => res.json({ success: true }));
     });
 
+    // --- NEU: Account löschen ---
+    app.delete("/api/auth/account", async (req: any, res) => {
+        try {
+            const userId = req.session.userId;
+            if (!userId) return res.status(401).json({ error: "Nicht autorisiert" });
+
+            // Dank 'onDelete: Cascade' in Prisma löscht dies auch alle Subjects, Deadlines, Scores und Collaborations des Users!
+            await prisma.user.delete({ where: { id: userId } });
+
+            req.session.destroy(() => res.json({ success: true }));
+        } catch (error) {
+            console.error("Fehler beim Löschen des Accounts:", error);
+            res.status(500).json({ error: "Fehler beim Löschen des Accounts" });
+        }
+    });
+
     const requireAuth = (req: any, res: any, next: any) => {
         if (!req.session.userId) return res.status(401).json({ error: "Nicht autorisiert" });
         next();
